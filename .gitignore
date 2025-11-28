@@ -182,4 +182,6 @@ static/
 # AI assistant
 .cursor/
 .claude/
+.claude-flow/
+.swarm/
 AGENTS.md
