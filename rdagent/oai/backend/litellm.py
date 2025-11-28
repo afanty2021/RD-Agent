@@ -1,3 +1,27 @@
+# -*- coding: utf-8 -*-
+"""
+LiteLLM后端实现模块
+
+本模块实现了基于LiteLLM的统一LLM后端接口，提供：
+1. 多Provider统一的API接口
+2. 模型调用成本追踪
+3. 错误处理和重试机制
+4. 函数调用和响应模式支持
+5. Token计数和配额管理
+
+LiteLLM是一个强大的LLM接口统一层，支持OpenAI、Azure、Claude、本地模型等
+多种Provider，为RD-Agent提供灵活的LLM集成能力。
+
+核心特性：
+- 统一接口：一套代码支持多种LLM Provider
+- 成本追踪：自动计算和累计API调用成本
+- 错误处理：统一的异常处理和重试逻辑
+- 功能支持：支持函数调用、响应模式等高级功能
+- 性能监控：Token使用量和响应时间统计
+
+作者: RD-Agent Team
+"""
+
 import copyreg
 from typing import Any, Literal, Optional, Type, TypedDict, Union, cast
 
@@ -46,9 +70,39 @@ ACC_COST = 0.0
 
 
 class LiteLLMAPIBackend(APIBackend):
-    """LiteLLM implementation of APIBackend interface"""
+    """
+    LiteLLM API后端实现
+
+    这是RD-Agent的默认LLM后端实现，基于LiteLLM提供统一的LLM访问接口。
+    支持多种LLM Provider，包括OpenAI、Azure OpenAI、Claude、本地模型等。
+
+    核心功能：
+    1. 统一的completion调用接口
+    2. Embedding向量生成
+    3. Token使用量统计和成本计算
+    4. 函数调用和响应模式支持
+    5. 自动错误处理和重试机制
+    6. 模型能力检测和兼容性验证
+
+    支持的Provider：
+    - OpenAI (GPT-3.5, GPT-4, GPT-4o等)
+    - Azure OpenAI
+    - Anthropic Claude (claude-3, claude-2等)
+    - 本地模型 (Ollama, vLLM等)
+    - 其他兼容OpenAI API的模型
+
+    成本追踪：
+    - 自动计算每次API调用的成本
+    - 累计总成本用于预算控制
+    - 支持不同Provider的定价模型
+
+    Attributes:
+        _has_logged_settings: 是否已记录设置信息的标志
+                             防止重复输出配置日志
+    """
 
     _has_logged_settings: bool = False
+    """设置信息记录标志，确保配置日志只输出一次"""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         if not self.__class__._has_logged_settings:

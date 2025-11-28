@@ -1,3 +1,28 @@
+# -*- coding: utf-8 -*-
+"""
+数据科学提案生成核心模块
+
+本模块实现了RD-Agent数据科学场景的核心提案生成功能，提供：
+1. 组件化提案生成机制
+2. RAG增强的知识检索
+3. 多样性注入策略
+4. 智能提案路由和调度
+
+核心组件：
+- COMPONENT_META: 组件元数据定义，规范各组件的接口和规范
+- DSProposalV2ExpGen: V2版本的提案生成器
+- 各种策略类：多样性、选择、规划等
+
+提案生成流程：
+1. 组件选择：基于当前进度和反馈选择目标组件
+2. 知识检索：RAG检索相关成功经验和失败教训
+3. 假设生成：结合知识和当前状态生成改进假设
+4. 多样性增强：根据需要注入新颖思路
+5. 提案验证：确保提案的可行性和合理性
+
+作者: RD-Agent Team
+"""
+
 import json
 import math
 from datetime import timedelta
@@ -42,36 +67,81 @@ from rdagent.utils.agent.tpl import T
 from rdagent.utils.repo.diff import generate_diff_from_dict
 from rdagent.utils.workflow import wait_retry
 
+# ==================== 组件元数据定义 ====================
+# 该字典定义了数据科学工作流中所有可用组件的元数据和规范
+# 每个组件都有明确的职责、接口定义和输出格式规范
 _COMPONENT_META: Dict[str, Dict[str, Any]] = {
     "DataLoadSpec": {
+        # 数据加载器组件：负责数据的加载、预处理和规格定义
         "target_name": "Data loader and specification generation",
+        """组件目标名称，用于日志记录和用户界面显示""",
+
         "spec_file": "spec/data_loader.md",
+        """组件规格说明文件，包含组件的详细规范、接口定义和使用指南""",
+
         "output_format_key": ".prompts:output_format.data_loader",
+        """输出格式配置键，指向prompts.yaml中定义的输出格式模板""",
+
         "task_class": DataLoaderTask,
+        """对应的任务类，定义该组件的具体执行逻辑和接口""",
     },
     "FeatureEng": {
+        # 特征工程组件：负责特征生成、选择和变换
         "target_name": "Feature engineering",
+        """组件目标名称，用于日志记录和用户界面显示""",
+
         "spec_file": "spec/feature.md",
+        """组件规格说明文件，包含特征工程的最佳实践和技术规范""",
+
         "output_format_key": ".prompts:output_format.feature",
+        """输出格式配置键，定义特征工程代码的生成格式和结构""",
+
         "task_class": FeatureTask,
+        """特征工程任务类，实现特征生成、选择和变换的具体逻辑""",
     },
     "Model": {
+        # 模型组件：负责模型选择、训练和调优
         "target_name": "Model",
+        """组件目标名称，用于日志记录和用户界面显示""",
+
         "spec_file": "spec/model.md",
+        """组件规格说明文件，包含各种机器学习模型的规范和使用指南""",
+
         "output_format_key": ".prompts:output_format.model",
+        """输出格式配置键，定义模型训练和评估代码的生成格式""",
+
         "task_class": ModelTask,
+        """模型任务类，实现模型训练、验证和调优的具体逻辑""",
     },
+
     "Ensemble": {
+        # 集成学习组件：负责多模型集成和优化
         "target_name": "Ensemble",
+        """组件目标名称，用于日志记录和用户界面显示""",
+
         "spec_file": "spec/ensemble.md",
+        """组件规格说明文件，包含各种集成学习方法的规范和实现指南""",
+
         "output_format_key": ".prompts:output_format.ensemble",
+        """输出格式配置键，定义集成学习代码的生成格式和结构""",
+
         "task_class": EnsembleTask,
+        """集成学习任务类，实现模型集成策略和优化的具体逻辑""",
     },
+
     "Workflow": {
+        # 工作流组件：负责端到端流程编排和优化
         "target_name": "Workflow",
+        """组件目标名称，用于日志记录和用户界面显示""",
+
         "spec_file": "spec/workflow.md",
+        """组件规格说明文件，包含完整数据科学工作流的编排规范""",
+
         "output_format_key": ".prompts:output_format.workflow",
+        """输出格式配置键，定义工作流编排代码的生成格式和结构""",
+
         "task_class": WorkflowTask,
+        """工作流任务类，实现端到端流程编排和优化的具体逻辑""",
     },
     "Pipeline": {
         "target_name": "Pipeline",
