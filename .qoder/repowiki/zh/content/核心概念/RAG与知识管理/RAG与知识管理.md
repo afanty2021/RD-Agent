@@ -2,12 +2,20 @@
 
 <cite>
 **本文档引用的文件**
-- [vector_base.py](file://rdagent/components/knowledge_management/vector_base.py)
-- [graph.py](file://rdagent/components/knowledge_management/graph.py)
-- [knowledge_management.py](file://rdagent/components/coder/CoSTEER/knowledge_management.py)
-- [extract_knowledge.py](file://rdagent/scenarios/kaggle/knowledge_management/extract_knowledge.py)
-- [proposal.py](file://rdagent/scenarios/kaggle/proposal/proposal.py)
+- [vector_base.py](file://rdagent/components/knowledge_management/vector_base.py) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
+- [graph.py](file://rdagent/components/knowledge_management/graph.py) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
+- [knowledge_management.py](file://rdagent/components/coder/CoSTEER/knowledge_management.py) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
+- [extract_knowledge.py](file://rdagent/scenarios/kaggle/knowledge_management/extract_knowledge.py) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
+- [proposal.py](file://rdagent/scenarios/kaggle/proposal/proposal.py) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
 </cite>
+
+## 更新摘要
+**变更内容**
+- 新增`CoSTEERKnowledge`类，用于封装完整的知识条目
+- 新增`CoSTEERRAGStrategy`类，实现知识存储、检索和RAG策略
+- 更新知识管理架构，支持版本化知识库管理
+- 增强知识检索机制，支持组件和错误分析查询
+- 完善知识反哺流程，提升研发效率
 
 ## 目录
 1. [引言](#引言)
@@ -33,7 +41,7 @@ RD-Agent中的RAG策略基于`RAGStrategy`抽象基类实现，该类定义了�
 系统支持两种知识库版本（V1和V2），其中V2版本引入了图结构来更好地表示知识间的关联关系。
 
 **Section sources**
-- [knowledge_management.py](file://rdagent/components/coder/CoSTEER/knowledge_management.py#L54-L79)
+- [knowledge_management.py](file://rdagent/components/coder/CoSTEER/knowledge_management.py#L54-L79) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
 
 ## 向量数据库实现
 向量数据库的实现位于`vector_base.py`文件中，主要由`VectorBase`和`PDVectorBase`类构成。该实现使用Pandas作为底层存储，并结合嵌入模型实现语义搜索。
@@ -76,10 +84,10 @@ KnowledgeMetaData <|-- Document
 ```
 
 **Diagram sources**
-- [vector_base.py](file://rdagent/components/knowledge_management/vector_base.py#L1-L208)
+- [vector_base.py](file://rdagent/components/knowledge_management/vector_base.py#L1-L208) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
 
 **Section sources**
-- [vector_base.py](file://rdagent/components/knowledge_management/vector_base.py#L1-L208)
+- [vector_base.py](file://rdagent/components/knowledge_management/vector_base.py#L1-L208) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
 
 ## 图数据库实现
 图数据库的实现位于`graph.py`文件中，基于`UndirectedGraph`和`UndirectedNode`类构建。该实现结合了向量搜索和图遍历能力，提供了更强大的知识检索功能。
@@ -132,10 +140,10 @@ UndirectedNode "1" -- "0..*" UndirectedNode : neighbors
 ```
 
 **Diagram sources**
-- [graph.py](file://rdagent/components/knowledge_management/graph.py#L0-L497)
+- [graph.py](file://rdagent/components/knowledge_management/graph.py#L0-L497) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
 
 **Section sources**
-- [graph.py](file://rdagent/components/knowledge_management/graph.py#L0-L497)
+- [graph.py](file://rdagent/components/knowledge_management/graph.py#L0-L497) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
 
 ## 知识检索机制
 知识检索机制是RAG策略的核心，通过`query`方法实现。该机制结合了向量搜索和图遍历，能够根据当前任务从知识库中找到最相关的先验信息。
@@ -164,12 +172,12 @@ style End fill:#f9f,stroke:#333
 ```
 
 **Diagram sources**
-- [graph.py](file://rdagent/components/knowledge_management/graph.py#L284-L315)
-- [knowledge_management.py](file://rdagent/components/coder/CoSTEER/knowledge_management.py#L790-L963)
+- [graph.py](file://rdagent/components/knowledge_management/graph.py#L284-L315) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
+- [knowledge_management.py](file://rdagent/components/coder/CoSTEER/knowledge_management.py#L790-L963) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
 
 **Section sources**
-- [graph.py](file://rdagent/components/knowledge_management/graph.py#L284-L315)
-- [knowledge_management.py](file://rdagent/components/coder/CoSTEER/knowledge_management.py#L790-L963)
+- [graph.py](file://rdagent/components/knowledge_management/graph.py#L284-L315) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
+- [knowledge_management.py](file://rdagent/components/coder/CoSTEER/knowledge_management.py#L790-L963) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
 
 ## 知识生成与反哺
 知识生成与反哺机制通过`generate_knowledge`方法实现，将新的实验成果转化为结构化知识并存储到知识库中。
@@ -210,10 +218,10 @@ Agent->>Agent : 基于知识调整策略
 ```
 
 **Diagram sources**
-- [knowledge_management.py](file://rdagent/components/coder/CoSTEER/knowledge_management.py#L790-L963)
+- [knowledge_management.py](file://rdagent/components/coder/CoSTEER/knowledge_management.py#L790-L963) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
 
 **Section sources**
-- [knowledge_management.py](file://rdagent/components/coder/CoSTEER/knowledge_management.py#L790-L963)
+- [knowledge_management.py](file://rdagent/components/coder/CoSTEER/knowledge_management.py#L790-L963) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
 
 ## 量化策略场景应用
 在量化策略研发场景中，知识管理机制发挥了重要作用，特别是在`rdagent/scenarios/qlib/knowledge_management/`中的具体用例。
@@ -254,12 +262,12 @@ K --> F
 ```
 
 **Diagram sources**
-- [extract_knowledge.py](file://rdagent/scenarios/kaggle/knowledge_management/extract_knowledge.py#L0-L64)
-- [proposal.py](file://rdagent/scenarios/kaggle/proposal/proposal.py#L57-L89)
+- [extract_knowledge.py](file://rdagent/scenarios/kaggle/knowledge_management/extract_knowledge.py#L0-L64) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
+- [proposal.py](file://rdagent/scenarios/kaggle/proposal/proposal.py#L57-L89) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
 
 **Section sources**
-- [extract_knowledge.py](file://rdagent/scenarios/kaggle/knowledge_management/extract_knowledge.py#L0-L64)
-- [proposal.py](file://rdagent/scenarios/kaggle/proposal/proposal.py#L57-L89)
+- [extract_knowledge.py](file://rdagent/scenarios/kaggle/knowledge_management/extract_knowledge.py#L0-L64) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
+- [proposal.py](file://rdagent/scenarios/kaggle/proposal/proposal.py#L57-L89) - *新增CoSTEERKnowledge和CoSTEERRAGStrategy类*
 
 ## 总结
 RD-Agent中的RAG与知识管理机制通过结合向量数据库和图数据库，实现了高效的知识存储、检索和反哺。这种机制不仅能够避免重复错误，还能显著加速研发进程。
