@@ -129,11 +129,11 @@ graph TD
 
 | 应用模块 | 入口命令 | 支持任务 | 特点 |
 |---------|---------|---------|------|
-| 数据科学代理 | `rdagent data-science` | 通用数据科学实验 | 完整的ML流水线自动化 |
-| Kaggle代理 | `rdagent kaggle` | Kaggle竞赛 | 针对竞赛优化的策略 |
-| 量化交易代理 | `rdagent quant` | 量化因子/模型开发 | 集成Qlib量化框架 |
-| 微调代理 | `rdagent finetune` | LLM微调任务 | 支持各种微调策略 |
-| 通用模型代理 | `rdagent general-model` | 模型提取与实现 | 从文档生成代码 |
+| 数据科学代理 | `rdagent data-science` | 通用数据科学实验 | 完整的ML流水线自动化，支持可配置选项 |
+| Kaggle代理 | `rdagent kaggle` | Kaggle竞赛 | 针对竞赛优化的策略，多模板支持 |
+| 量化交易代理 | `rdagent quant` | 量化因子/模型开发 | 集成Qlib量化框架，支持因子挖掘 |
+| 微调代理 | `rdagent finetune` | LLM微调任务 | 支持各种微调策略，多框架集成 |
+| 通用模型代理 | `rdagent general-model` | 模型提取与实现 | 从文档生成代码，支持多模型格式 |
 
 ## 运行与开发
 
@@ -784,6 +784,28 @@ AZURE_OPENAI_API_KEY=your_azure_key
 ANTHROPIC_API_KEY=your_claude_key
 ```
 
+### Q: 如何配置数据科学可选项？
+A: 数据科学场景现在支持丰富的配置选项，可以通过环境变量或配置文件自定义：
+```env
+DS_MAX_EXPERIMENTS=50
+DS_ENABLE_DIVERSITY=true
+DS_KNOWLEDGE_BASE_PATH=./knowledge
+DS_SELECTION_STRATEGY=best_valid
+```
+
+### Q: 如何处理LiteLLM超时错误？
+A: 项目已修复LiteLLM的超时错误处理，现在支持：
+- 自动重试机制
+- 可配置的超时时间
+- 优雅的降级策略
+- 错误日志和监控
+
+### Q: Docker和Conda环境如何选择？
+A: 项目提供了完整的执行环境配置指南：
+- **Docker环境**：适合生产部署和CI/CD，提供一致的隔离环境
+- **Conda环境**：适合开发环境，支持灵活的包管理和调试
+- 支持混合使用：本地开发Conda，部署使用Docker
+
 ### Q: 如何添加新的竞赛场景？
 A: 参考`rdagent/scenarios/kaggle/experiment/templates/`下的模板，创建新的竞赛模板和配置文件。
 
@@ -986,6 +1008,27 @@ bandit -r rdagent/
 - **测试策略分析**：识别出完整的测试策略和CI/CD集成
 - **覆盖率初始评估**：达到85%的核心模块覆盖率
 
+### 2025-12-06 - Git同步和文档更新
+- **上游同步完成**：同步了microsoft/RD-Agent最新变更到本地仓库
+- **数据科学配置增强**：
+  - 新增丰富的可配置选项支持
+  - 完善环境变量配置系统
+  - 增强多样性和选择策略配置
+- **安全修复和优化**：
+  - 修复LiteLLM超时错误处理
+  - 移除可能泄露敏感环境变量的CI步骤
+  - 更新setuptools解决安装问题
+- **执行环境改进**：
+  - 新增Docker vs Conda环境配置指南
+  - 完善执行环境选择和最佳实践
+  - 增强环境兼容性和稳定性
+- **文档同步更新**：
+  - 更新FAQ部分反映最新功能
+  - 新增数据科学配置说明
+  - 完善环境配置和故障排除指南
+- **上下文文档同步**：代码变更后自动同步更新AI上下文文档，确保文档与代码实现保持一致
+- **项目结构优化**：清理和优化项目Wiki结构，提升文档可读性和维护性
+
 ---
 
 ## 🎯 项目AI上下文初始化完成总结
@@ -1023,4 +1066,4 @@ bandit -r rdagent/
 
 **RD-Agent现已具备完整的企业级AI开发和部署能力，可以支持大规模机器学习工程自主代理系统的生产环境部署和运营管理。**
 
-*最后更新：2025-11-17 14:49:32*
+*最后更新：2025-12-06*
