@@ -185,3 +185,6 @@ static/
 .claude-flow/
 .swarm/
 AGENTS.md
+
+# Spec workflow templates
+.spec-workflow/
