@@ -74,74 +74,54 @@ _COMPONENT_META: Dict[str, Dict[str, Any]] = {
     "DataLoadSpec": {
         # 数据加载器组件：负责数据的加载、预处理和规格定义
         "target_name": "Data loader and specification generation",
-        """组件目标名称，用于日志记录和用户界面显示""",
 
         "spec_file": "spec/data_loader.md",
-        """组件规格说明文件，包含组件的详细规范、接口定义和使用指南""",
 
         "output_format_key": ".prompts:output_format.data_loader",
-        """输出格式配置键，指向prompts.yaml中定义的输出格式模板""",
 
         "task_class": DataLoaderTask,
-        """对应的任务类，定义该组件的具体执行逻辑和接口""",
     },
     "FeatureEng": {
         # 特征工程组件：负责特征生成、选择和变换
         "target_name": "Feature engineering",
-        """组件目标名称，用于日志记录和用户界面显示""",
 
         "spec_file": "spec/feature.md",
-        """组件规格说明文件，包含特征工程的最佳实践和技术规范""",
 
         "output_format_key": ".prompts:output_format.feature",
-        """输出格式配置键，定义特征工程代码的生成格式和结构""",
 
         "task_class": FeatureTask,
-        """特征工程任务类，实现特征生成、选择和变换的具体逻辑""",
     },
     "Model": {
         # 模型组件：负责模型选择、训练和调优
         "target_name": "Model",
-        """组件目标名称，用于日志记录和用户界面显示""",
 
         "spec_file": "spec/model.md",
-        """组件规格说明文件，包含各种机器学习模型的规范和使用指南""",
 
         "output_format_key": ".prompts:output_format.model",
-        """输出格式配置键，定义模型训练和评估代码的生成格式""",
 
         "task_class": ModelTask,
-        """模型任务类，实现模型训练、验证和调优的具体逻辑""",
     },
 
     "Ensemble": {
         # 集成学习组件：负责多模型集成和优化
         "target_name": "Ensemble",
-        """组件目标名称，用于日志记录和用户界面显示""",
 
         "spec_file": "spec/ensemble.md",
-        """组件规格说明文件，包含各种集成学习方法的规范和实现指南""",
 
         "output_format_key": ".prompts:output_format.ensemble",
-        """输出格式配置键，定义集成学习代码的生成格式和结构""",
 
         "task_class": EnsembleTask,
-        """集成学习任务类，实现模型集成策略和优化的具体逻辑""",
     },
 
     "Workflow": {
         # 工作流组件：负责端到端流程编排和优化
         "target_name": "Workflow",
-        """组件目标名称，用于日志记录和用户界面显示""",
 
         "spec_file": "spec/workflow.md",
-        """组件规格说明文件，包含完整数据科学工作流的编排规范""",
 
         "output_format_key": ".prompts:output_format.workflow",
-        """输出格式配置键，定义工作流编排代码的生成格式和结构""",
 
         "task_class": WorkflowTask,
-        """工作流任务类，实现端到端流程编排和优化的具体逻辑""",
     },
     "Pipeline": {
         "target_name": "Pipeline",
@@ -782,9 +762,7 @@ You help users retrieve relevant knowledge from community discussions and public
         sota_exp_desc: str,
         exp_feedback_list_desc: str,
     ) -> Dict:
-        """
-        Critique the generated hypotheses, identifying flaws and suggesting improvements.
-        """
+        """Critique the generated hypotheses, identifying flaws and suggesting improvements."""
         hypotheses_formatted = ""
         for i, (problem_name, hypothesis_data) in enumerate(hypothesis_dict.items()):
 
@@ -853,8 +831,8 @@ You help users retrieve relevant knowledge from community discussions and public
         sibling_exp: List[DSExperiment] | None = None,
         former_user_instructions: UserInstructions | None = None,
     ) -> Dict:
-        """
-        Generate improved hypotheses based on critique feedback for each original hypothesis.
+        """Generate improved hypotheses based on critique feedback for each original hypothesis.
+
         Returns a dict with the same keys as hypothesis_dict, containing improved versions.
         """
         sibling_hypotheses = [exp.hypothesis for exp in sibling_exp] if sibling_exp else None
@@ -932,9 +910,7 @@ You help users retrieve relevant knowledge from community discussions and public
         self,
         hypothesis_dict: dict,
     ) -> pd.Series:
-        """
-        Compute weighted total scores for each hypothesis and return the top five.
-        """
+        """Compute weighted total scores for each hypothesis and return the top five."""
         weights = {
             "alignment_score": 0.2,
             "impact_score": 0.4,
@@ -968,9 +944,9 @@ You help users retrieve relevant knowledge from community discussions and public
         hypothesis_dict: dict,
         problem_dict: dict,
     ) -> int:
-        """
-        From the top five hypotheses (by weighted score), select one based on additional weighting rules
-        for 'inspired' flag and 'SCENARIO_PROBLEM' label. Returns the chosen hypothesis name and a
+        """From the top five hypotheses (by weighted score), select one based on additional weighting rules.
+
+        For 'inspired' flag and 'SCENARIO_PROBLEM' label. Returns the chosen hypothesis name and a
         DSHypothesis instance.
         """
         # Increase the weight of the hypothesis that is inspired by the idea pool to 3x.
@@ -1098,19 +1074,18 @@ You help users retrieve relevant knowledge from community discussions and public
             return -1, len(loop_id_list)
 
     def _llm_select_extra_hypo(self, trace: DSTrace) -> list[tuple[str, float]]:
-        """
-        Retrieve a list of additional hypotheses along with their ensemble scores
-        from the given experiment trace, intended for input into an LLM-based selection mechanism.
+        """Retrieve a list of additional hypotheses along with their ensemble scores.
+
+        From the given experiment trace, intended for input into an LLM-based selection mechanism.
 
         Parameters:
-            trace (DSTrace):
+            trace (DSTrace): The experiment trace to extract hypotheses from.
 
         Returns:
-            list[tuple[str, float]]:
-                A list of tuples, where each tuple consists of:
-                    - str: The hypothesis description from a selected experiment.
+            list[tuple[str, float]]: A list of tuples, where each tuple consists of:
+                - str: The hypothesis description from a selected experiment.
                       Example: "Use XGBoost with tuned learning_rate".
-                    - float: The associated ensemble result score, rounded to 3 decimal places.
+                - float: The associated ensemble result score, rounded to 3 decimal places.
                       Example: 0.845
                 Example:
                     [
@@ -1230,10 +1205,8 @@ You help users retrieve relevant knowledge from community discussions and public
     def hypothesis_rank(
         self, hypothesis_dict: dict, problem_dict: dict, selected_idx: Optional[int] = None
     ) -> Tuple[str, DSHypothesis]:
-        """
         Wrapper method that computes the top five hypotheses by weighted scoring and then selects one
         according to additional weighting rules.
-        """
         scores_sorted = self.compute_top_scores(hypothesis_dict)
         if selected_idx is None:
             selected_idx = self.select_hypothesis(

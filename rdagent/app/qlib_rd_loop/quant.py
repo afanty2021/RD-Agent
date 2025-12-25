@@ -6,6 +6,10 @@ import asyncio
 from typing import Any
 
 import fire
+from dotenv import load_dotenv
+
+# Load environment variables from .env file before importing settings
+load_dotenv(".env", override=True)
 
 from rdagent.app.qlib_rd_loop.conf import QUANT_PROP_SETTING
 from rdagent.components.workflow.conf import BasePropSetting

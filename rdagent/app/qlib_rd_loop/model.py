@@ -5,6 +5,10 @@ Model workflow with session control
 import asyncio
 
 import fire
+from dotenv import load_dotenv
+
+# Load environment variables from .env file before importing settings
+load_dotenv(".env", override=True)
 
 from rdagent.app.qlib_rd_loop.conf import MODEL_PROP_SETTING
 from rdagent.components.workflow.rd_loop import RDLoop

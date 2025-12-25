@@ -314,7 +314,10 @@ class Env(Generic[ASpecificEnvConf]):
         if self.conf.running_timeout_period is None:
             timeout_cmd = entry
         else:
-            timeout_cmd = f"timeout --kill-after=10 {self.conf.running_timeout_period} {entry}"
+            # macOS uses gtimeout (from coreutils), Linux uses timeout
+            import platform
+            timeout_bin = "gtimeout" if platform.system() == "Darwin" else "timeout"
+            timeout_cmd = f"{timeout_bin} --kill-after=10 {self.conf.running_timeout_period} {entry}"
         entry_add_timeout = (
             f"/bin/sh -c '"  # start of the sh command
             + f"{timeout_cmd}; entry_exit_code=$?; "

@@ -116,38 +116,6 @@ def main(
         4. 启动DataScienceRDLoop主循环
         5. 结果保存和清理
     """
-        A path like `$LOG_PATH/__session__/1/0_propose`. This indicates that we restore the state after finishing step 0 in loop 1.
-    checkout :
-        Used to control the log session path. Boolean type, default is True.
-        - If True, the new loop will use the existing folder and clear logs for sessions after the one corresponding to the given path.
-        - If False, the new loop will use the existing folder but keep the logs for sessions after the one corresponding to the given path.
-    checkout_path:
-        If a checkout_path (or a str like Path) is provided, the new loop will be saved to that path, leaving the original path unchanged.
-    step_n :
-        Number of steps to run; if None, the process will run indefinitely until an error or KeyboardInterrupt occurs.
-    loop_n :
-        Number of loops to run; if None, the process will run indefinitely until an error or KeyboardInterrupt occurs.
-        - If the current loop is incomplete, it will be counted as the first loop for completion.
-        - If both step_n and loop_n are provided, the process will stop as soon as either condition is met.
-    timeout :
-        Maximum duration to run the loop. Accepts a string format recognized by the internal timer.
-        - If None, the loop will run until completion, error, or KeyboardInterrupt.
-    competition :
-        Competition name.
-    replace_timer :
-        If a session is loaded, determines whether to replace the timer with session.timer.
-    exp_gen_cls :
-        When there are different stages, the exp_gen can be replaced with the new proposal.
-
-
-    Auto R&D Evolving loop for models in a Kaggle scenario.
-    You can continue running a session by using the command:
-
-    .. code-block:: bash
-
-      dotenv run -- python rdagent/app/data_science/loop.py [--competition titanic] $LOG_PATH/__session__/1/0_propose  --step_n 1   # `step_n` is an optional parameter
-      rdagent kaggle --competition playground-series-s4e8  # This command is recommended.
-    """
     if not checkout_path is None:
         checkout = Path(checkout_path)
 

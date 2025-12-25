@@ -8,7 +8,11 @@ from typing import Any, Optional
 
 import fire
 import typer
+from dotenv import load_dotenv
 from typing_extensions import Annotated
+
+# Load environment variables from .env file before importing settings
+load_dotenv(".env", override=True)
 
 from rdagent.app.qlib_rd_loop.conf import FACTOR_PROP_SETTING
 from rdagent.components.workflow.rd_loop import RDLoop

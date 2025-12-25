@@ -6,13 +6,19 @@ from pathlib import Path
 import pandas as pd
 from jinja2 import Environment, StrictUndefined
 
+from rdagent.components.coder.model_coder.conf import MODEL_COSTEER_SETTINGS
 from rdagent.components.coder.factor_coder.config import FACTOR_COSTEER_SETTINGS
-from rdagent.utils.env import QTDockerEnv
+from rdagent.utils.env import QTDockerEnv, QlibCondaEnv, QlibCondaConf
 
 
 def generate_data_folder_from_qlib():
     template_path = Path(__file__).parent / "factor_data_template"
-    qtde = QTDockerEnv()
+
+    # 根据环境配置选择环境类型
+    if MODEL_COSTEER_SETTINGS.env_type == "docker":
+        qtde = QTDockerEnv()
+    else:
+        qtde = QlibCondaEnv(conf=QlibCondaConf())
     qtde.prepare()
 
     # Run the Qlib backtest
