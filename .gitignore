@@ -153,6 +153,9 @@ reports/
 # git_ignore_folder
 git_ignore_folder/
 
+# CoSTEER知识库目录
+knowledge/
+
 #cache
 *cache*/
 *cache.json
