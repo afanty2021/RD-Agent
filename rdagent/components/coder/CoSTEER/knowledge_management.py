@@ -1,25 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-CoSTEER 知识管理系统
-
-本模块实现了CoSTEER框架的知识管理核心功能，提供：
-1. 知识单元的封装和存储
-2. RAG（检索增强生成）策略实现
-3. 知识库的持久化和版本管理
-4. 基于embedding的相似性检索
-5. 知识图谱的组织和管理
-
-知识管理是CoSTEER框架的核心能力之一，通过积累和复用历史经验，
-避免重复错误，提高开发效率和代码质量。
-
-核心组件：
-- CoSTEERKnowledge: 知识单元，封装任务、实现和反馈
-- CoSTEERRAGStrategy: RAG策略，实现知识的检索和应用
-- CoSTEERKnowledgeBase: 知识库，管理所有知识的存储和检索
-
-作者: RD-Agent Team
-"""
-
 from __future__ import annotations
 
 import copy
@@ -56,56 +34,15 @@ from rdagent.utils.agent.tpl import T
 
 
 class CoSTEERKnowledge(Knowledge):
-    """
-    CoSTEER知识单元
-
-    封装了一个完整的知识条目，包含任务描述、实现代码和评估反馈。
-    这是CoSTEER框架知识管理的基本单位，用于存储和检索开发经验。
-
-    知识结构：
-    - target_task: 任务的目标和要求描述
-    - implementation: 任务的实现代码工作空间
-    - feedback: 实现的评估反馈，包含执行结果和最终决策
-
-    设计理念：
-    - 完整性：包含任务-实现-反馈的完整闭环
-    - 可复用性：通过相似性检索支持类似任务的解决
-    - 可追溯性：保留完整的开发历史和评估信息
-
-    使用场景：
-    - 成功经验复用：检索相似的成功实现
-    - 失败避免：识别并避开历史上失败的方案
-    - 知识积累：逐步构建项目特定的知识库
-
-    Attributes:
-        target_task: 目标任务对象，包含任务描述、要求等信息
-        implementation: 实现工作空间的副本，包含所有相关代码文件
-        feedback: 评估反馈对象，包含执行结果、代码审查和最终决策
-    """
-
     def __init__(
         self,
         target_task: Task,
         implementation: FBWorkspace,
         feedback: Feedback,
     ) -> None:
-        """
-        初始化CoSTEER知识单元
-
-        Args:
-            target_task: 目标任务，描述需要解决的问题
-            implementation: 实现工作空间，包含解决问题的代码
-                          使用copy()创建副本以确保独立性
-            feedback: 评估反馈，包含实现质量的评估结果
-        """
         self.target_task = target_task
-        """目标任务，包含任务描述和要求"""
-
         self.implementation = implementation.copy()
-        """实现工作空间副本，包含所有代码文件"""
-
         self.feedback = feedback
-        """评估反馈，包含执行结果和质量评估"""
 
     def get_implementation_and_feedback_str(self) -> str:
         return f"""------------------implementation code:------------------

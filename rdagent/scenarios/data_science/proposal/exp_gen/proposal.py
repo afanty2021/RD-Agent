@@ -1,28 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-数据科学提案生成核心模块
-
-本模块实现了RD-Agent数据科学场景的核心提案生成功能，提供：
-1. 组件化提案生成机制
-2. RAG增强的知识检索
-3. 多样性注入策略
-4. 智能提案路由和调度
-
-核心组件：
-- COMPONENT_META: 组件元数据定义，规范各组件的接口和规范
-- DSProposalV2ExpGen: V2版本的提案生成器
-- 各种策略类：多样性、选择、规划等
-
-提案生成流程：
-1. 组件选择：基于当前进度和反馈选择目标组件
-2. 知识检索：RAG检索相关成功经验和失败教训
-3. 假设生成：结合知识和当前状态生成改进假设
-4. 多样性增强：根据需要注入新颖思路
-5. 提案验证：确保提案的可行性和合理性
-
-作者: RD-Agent Team
-"""
-
 import json
 import math
 from datetime import timedelta
@@ -67,60 +42,35 @@ from rdagent.utils.agent.tpl import T
 from rdagent.utils.repo.diff import generate_diff_from_dict
 from rdagent.utils.workflow import wait_retry
 
-# ==================== 组件元数据定义 ====================
-# 该字典定义了数据科学工作流中所有可用组件的元数据和规范
-# 每个组件都有明确的职责、接口定义和输出格式规范
 _COMPONENT_META: Dict[str, Dict[str, Any]] = {
     "DataLoadSpec": {
-        # 数据加载器组件：负责数据的加载、预处理和规格定义
         "target_name": "Data loader and specification generation",
-
         "spec_file": "spec/data_loader.md",
-
         "output_format_key": ".prompts:output_format.data_loader",
-
         "task_class": DataLoaderTask,
     },
     "FeatureEng": {
-        # 特征工程组件：负责特征生成、选择和变换
         "target_name": "Feature engineering",
-
         "spec_file": "spec/feature.md",
-
         "output_format_key": ".prompts:output_format.feature",
-
         "task_class": FeatureTask,
     },
     "Model": {
-        # 模型组件：负责模型选择、训练和调优
         "target_name": "Model",
-
         "spec_file": "spec/model.md",
-
         "output_format_key": ".prompts:output_format.model",
-
         "task_class": ModelTask,
     },
-
     "Ensemble": {
-        # 集成学习组件：负责多模型集成和优化
         "target_name": "Ensemble",
-
         "spec_file": "spec/ensemble.md",
-
         "output_format_key": ".prompts:output_format.ensemble",
-
         "task_class": EnsembleTask,
     },
-
     "Workflow": {
-        # 工作流组件：负责端到端流程编排和优化
         "target_name": "Workflow",
-
         "spec_file": "spec/workflow.md",
-
         "output_format_key": ".prompts:output_format.workflow",
-
         "task_class": WorkflowTask,
     },
     "Pipeline": {
@@ -762,7 +712,9 @@ You help users retrieve relevant knowledge from community discussions and public
         sota_exp_desc: str,
         exp_feedback_list_desc: str,
     ) -> Dict:
-        """Critique the generated hypotheses, identifying flaws and suggesting improvements."""
+        """
+        Critique the generated hypotheses, identifying flaws and suggesting improvements.
+        """
         hypotheses_formatted = ""
         for i, (problem_name, hypothesis_data) in enumerate(hypothesis_dict.items()):
 
@@ -831,8 +783,8 @@ You help users retrieve relevant knowledge from community discussions and public
         sibling_exp: List[DSExperiment] | None = None,
         former_user_instructions: UserInstructions | None = None,
     ) -> Dict:
-        """Generate improved hypotheses based on critique feedback for each original hypothesis.
-
+        """
+        Generate improved hypotheses based on critique feedback for each original hypothesis.
         Returns a dict with the same keys as hypothesis_dict, containing improved versions.
         """
         sibling_hypotheses = [exp.hypothesis for exp in sibling_exp] if sibling_exp else None
@@ -910,7 +862,9 @@ You help users retrieve relevant knowledge from community discussions and public
         self,
         hypothesis_dict: dict,
     ) -> pd.Series:
-        """Compute weighted total scores for each hypothesis and return the top five."""
+        """
+        Compute weighted total scores for each hypothesis and return the top five.
+        """
         weights = {
             "alignment_score": 0.2,
             "impact_score": 0.4,
@@ -944,9 +898,9 @@ You help users retrieve relevant knowledge from community discussions and public
         hypothesis_dict: dict,
         problem_dict: dict,
     ) -> int:
-        """From the top five hypotheses (by weighted score), select one based on additional weighting rules.
-
-        For 'inspired' flag and 'SCENARIO_PROBLEM' label. Returns the chosen hypothesis name and a
+        """
+        From the top five hypotheses (by weighted score), select one based on additional weighting rules
+        for 'inspired' flag and 'SCENARIO_PROBLEM' label. Returns the chosen hypothesis name and a
         DSHypothesis instance.
         """
         # Increase the weight of the hypothesis that is inspired by the idea pool to 3x.
@@ -1074,18 +1028,19 @@ You help users retrieve relevant knowledge from community discussions and public
             return -1, len(loop_id_list)
 
     def _llm_select_extra_hypo(self, trace: DSTrace) -> list[tuple[str, float]]:
-        """Retrieve a list of additional hypotheses along with their ensemble scores.
-
-        From the given experiment trace, intended for input into an LLM-based selection mechanism.
+        """
+        Retrieve a list of additional hypotheses along with their ensemble scores
+        from the given experiment trace, intended for input into an LLM-based selection mechanism.
 
         Parameters:
-            trace (DSTrace): The experiment trace to extract hypotheses from.
+            trace (DSTrace):
 
         Returns:
-            list[tuple[str, float]]: A list of tuples, where each tuple consists of:
-                - str: The hypothesis description from a selected experiment.
+            list[tuple[str, float]]:
+                A list of tuples, where each tuple consists of:
+                    - str: The hypothesis description from a selected experiment.
                       Example: "Use XGBoost with tuned learning_rate".
-                - float: The associated ensemble result score, rounded to 3 decimal places.
+                    - float: The associated ensemble result score, rounded to 3 decimal places.
                       Example: 0.845
                 Example:
                     [
