@@ -158,6 +158,41 @@ class CoSTEERSingleFeedback(Feedback):
             >>> merged.final_decision  # True
             >>> merged.execution  # "执行1\n\n执行2"
         """
+        if len(feedback_li) == 0:
+            raise IndexError("feedback_li cannot be empty")
+
+        # 合并 final_decision: AND逻辑（所有反馈都必须成功）
+        final_decisions = [fb.final_decision for fb in feedback_li if fb is not None]
+        # 如果有任何False，则结果为False；如果全部为True或只有None，则结果为True（当有至少一个True时）
+        # 如果全部为None，则结果为None
+        if len(final_decisions) == 0:
+            merged_decision = None
+        elif any(d is False for d in final_decisions):
+            merged_decision = False
+        else:
+            merged_decision = all(final_decisions)
+
+        # 合并 execution: 连接所有非None的执行反馈
+        executions = [fb.execution for fb in feedback_li if fb is not None and fb.execution is not None]
+        merged_execution = "\n\n".join(executions) if executions else ""
+
+        # 合并 return_checking: 连接所有非None的返回值检查反馈
+        return_checkings = [fb.return_checking for fb in feedback_li if fb is not None and fb.return_checking is not None]
+        merged_return_checking = "\n\n".join(return_checkings) if return_checkings else None
+
+        # 合并 code: 连接所有非None的代码内容
+        codes = [fb.code for fb in feedback_li if fb is not None and fb.code is not None]
+        merged_code = "\n\n".join(codes) if codes else ""
+
+        # 创建并返回合并后的反馈对象
+        # 注意：总是返回 CoSTEERSingleFeedback 类型，而不是使用 cls
+        # 这是因为 CoSTEERSingleFeedbackDeprecated 的 __init__ 有不同的参数签名
+        return CoSTEERSingleFeedback(
+            execution=merged_execution,
+            return_checking=merged_return_checking,
+            code=merged_code,
+            final_decision=merged_decision,
+        )
 
     def __str__(self) -> str:
         return f"""------------------Execution------------------
@@ -331,19 +366,19 @@ class CoSTEERMultiFeedback(Feedback):
 
     def is_acceptable(self) -> bool:
         """
-        检查所有反馈是否都可接受
+        检查所有反馈是否都可接受（忽略None反馈）
 
-        该方法调用每个反馈对象的is_acceptable方法，要求所有反馈都返回True。
+        该方法调用每个反馈对象的is_acceptable方法，要求所有非None反馈都返回True。
         用于检查整体任务的可接受性，比__bool__方法更宽松。
 
         Returns:
-            bool: 如果所有反馈都可接受则返回True，否则返回False
+            bool: 如果所有非None反馈都可接受则返回True，否则返回False
 
         Note:
-            这是一个备用方法，当前实现与__bool__方法相同，
-            但设计上允许子类提供不同的可接受性判断逻辑。
+            这是一个备用方法，当前实现与finished()方法相同，
+            过滤掉None反馈以避免调用None对象的方法。
         """
-        return all(feedback.is_acceptable() for feedback in self.feedback_list)
+        return all(feedback.is_acceptable() for feedback in self.feedback_list if feedback is not None)
 
     def finished(self) -> bool:
         """

@@ -664,6 +664,11 @@ class DockerConf(EnvConf):
 
 
 class QlibCondaConf(CondaConf):
+    model_config = SettingsConfigDict(
+        env_prefix="QLIB_CONDA_",
+        env_parse_none_str="None",
+    )
+
     conda_env_name: str = "rdagent4qlib"
     enable_cache: bool = False
     default_entry: str = "qrun conf.yaml"

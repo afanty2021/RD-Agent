@@ -59,7 +59,15 @@ def calculate_embedding_distance_between_str_list(
         return [[]]
 
     # 批量获取所有字符串的embedding向量
-    embeddings = APIBackend().create_embedding(source_str_list + target_str_list)
+    try:
+        embeddings = APIBackend().create_embedding(source_str_list + target_str_list)
+    except Exception as e:
+        # 如果embedding创建失败（例如API不可用），使用零向量作为fallback
+        # 这样可以确保系统继续运行，只是RAG检索效果会降低（所有相似度都为0）
+        import warnings
+        warnings.warn(f"Failed to create embedding for similarity calculation: {e}. Using zero vectors as fallback.")
+        total_count = len(source_str_list) + len(target_str_list)
+        embeddings = [np.zeros(768) for _ in range(total_count)]
 
     # 分离源和目标的embedding向量
     source_embeddings = embeddings[: len(source_str_list)]

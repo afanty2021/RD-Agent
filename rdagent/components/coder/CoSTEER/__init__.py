@@ -35,10 +35,10 @@ class CoSTEER(Developer[Experiment]):
 
         self.max_loop = settings.max_loop if max_loop is None else max_loop
         self.knowledge_base_path = (
-            Path(settings.knowledge_base_path) if settings.knowledge_base_path is not None else None
+            Path(settings.knowledge_base_path).expanduser() if settings.knowledge_base_path is not None else None
         )
         self.new_knowledge_base_path = (
-            Path(settings.new_knowledge_base_path) if settings.new_knowledge_base_path is not None else None
+            Path(settings.new_knowledge_base_path).expanduser() if settings.new_knowledge_base_path is not None else None
         )
 
         self.with_knowledge = with_knowledge

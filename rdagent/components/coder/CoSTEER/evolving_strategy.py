@@ -16,9 +16,12 @@ CoSTEER (Collaborative Self-adaptive Testing and Evaluation for Evolutionary Ref
 
 from __future__ import annotations
 
+import logging
 from abc import abstractmethod
 
 from rdagent.components.coder.CoSTEER.config import CoSTEERSettings
+
+logger = logging.getLogger(__name__)
 from rdagent.components.coder.CoSTEER.evaluators import (
     CoSTEERMultiFeedback,
     CoSTEERSingleFeedback,
@@ -208,25 +211,40 @@ class MultiProcessEvolvingStrategy(EvolvingStrategy):
 
         # ==================== 2. 并行执行阶段 ====================
         # 使用多进程并行实现待完成的任务
-        result = multiprocessing_wrapper(
-            [
-                (
-                    self.implement_one_task,
+        # 增强的错误处理：即使单个任务失败，也不终止整个循环
+        try:
+            result = multiprocessing_wrapper(
+                [
                     (
-                        evo.sub_tasks[target_index],           # 目标任务
-                        queried_knowledge,                     # 查询到的知识
-                        evo.experiment_workspace,              # 实验工作空间
-                        None if last_feedback is None else last_feedback[target_index],  # 历史反馈
-                    ),
-                )
-                for target_index in to_be_finished_task_index
-            ],
-            n=RD_AGENT_SETTINGS.multi_proc_n,  # 使用配置的进程数
-        )
+                        self.implement_one_task,
+                        (
+                            evo.sub_tasks[target_index],           # 目标任务
+                            queried_knowledge,                     # 查询到的知识
+                            evo.experiment_workspace,              # 实验工作空间
+                            None if last_feedback is None else last_feedback[target_index],  # 历史反馈
+                        ),
+                    )
+                    for target_index in to_be_finished_task_index
+                ],
+                n=RD_AGENT_SETTINGS.multi_proc_n,  # 使用配置的进程数
+            )
 
-        # 将并行执行的结果映射回代码列表
-        for index, target_index in enumerate(to_be_finished_task_index):
-            code_list[target_index] = result[index]
+            # 将并行执行的结果映射回代码列表
+            for index, target_index in enumerate(to_be_finished_task_index):
+                code_list[target_index] = result[index]
+
+        except Exception as e:
+            # 错误恢复：捕获代码生成阶段的异常，记录失败的任务
+            logger.error(f"代码生成阶段发生错误: {type(e).__name__}: {e}")
+            logger.error(f"失败的任务索引: {to_be_finished_task_index}")
+
+            # 将失败的任务标记为None，继续执行其他任务
+            for target_index in to_be_finished_task_index:
+                if code_list[target_index] is None:
+                    # 记录失败的任务信息，避免在下一轮重复尝试
+                    task_desc = evo.sub_tasks[target_index].get_task_information()
+                    queried_knowledge.failed_task_info_set.add(task_desc)
+                    logger.warning(f"任务 {target_index} ({task_desc[:50]}...) 已标记为失败")
 
         # ==================== 3. 结果整合阶段 ====================
         # 将代码实现分配给进化主体

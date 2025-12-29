@@ -1205,8 +1205,10 @@ You help users retrieve relevant knowledge from community discussions and public
     def hypothesis_rank(
         self, hypothesis_dict: dict, problem_dict: dict, selected_idx: Optional[int] = None
     ) -> Tuple[str, DSHypothesis]:
+        """
         Wrapper method that computes the top five hypotheses by weighted scoring and then selects one
         according to additional weighting rules.
+        """
         scores_sorted = self.compute_top_scores(hypothesis_dict)
         if selected_idx is None:
             selected_idx = self.select_hypothesis(

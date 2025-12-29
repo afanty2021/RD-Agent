@@ -133,10 +133,20 @@ class LiteLLMAPIBackend(APIBackend):
                 f"{LogColors.MAGENTA}Creating embedding{LogColors.END} for: {input_content_list}",
                 tag="debug_litellm_emb",
             )
-        response = embedding(
-            model=model_name,
-            input=input_content_list,
-        )
+
+        # 准备embedding调用参数
+        embedding_kwargs = {
+            "model": model_name,
+            "input": input_content_list,
+        }
+
+        # 如果配置了embedding专用的API密钥和base URL，添加到参数中
+        if LITELLM_SETTINGS.embedding_openai_api_key:
+            embedding_kwargs["api_key"] = LITELLM_SETTINGS.embedding_openai_api_key
+        if LITELLM_SETTINGS.embedding_openai_base_url:
+            embedding_kwargs["api_base"] = LITELLM_SETTINGS.embedding_openai_base_url
+
+        response = embedding(**embedding_kwargs)
         response_list = [data["embedding"] for data in response.data]
         return response_list
 

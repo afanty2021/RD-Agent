@@ -145,12 +145,27 @@ def multiprocessing_wrapper(func_calls: list[tuple[Callable, tuple]], n: int) ->
     if n == 1 or max(1, min(n, len(func_calls))) == 1:
         return [f(*args) for f, args in func_calls]
 
-    with mp.Pool(processes=max(1, min(n, len(func_calls)))) as pool:
+    # 使用更可靠的进程启动方法，避免 macOS 上的资源泄漏问题
+    # spawn 方法更安全，虽然启动稍慢，但能避免 fork 导致的资源共享问题
+    ctx = mp.get_context("spawn")
+
+    with ctx.Pool(processes=max(1, min(n, len(func_calls)))) as pool:
         results = [
             pool.apply_async(_subprocess_wrapper, args=(f, LLM_CACHE_SEED_GEN.get_next_seed(), args))
             for f, args in func_calls
         ]
-        return [result.get() for result in results]
+        # 添加超时和更好的异常处理
+        try:
+            return [result.get(timeout=3600) for result in results]  # 1小时超时
+        except Exception as e:
+            # 确保在异常情况下也能获取已完成的结果
+            final_results = []
+            for result in results:
+                try:
+                    final_results.append(result.get(timeout=10))
+                except Exception:
+                    final_results.append(None)
+            return final_results
 
 
 def cache_with_pickle(hash_func: Callable, post_process_func: Callable | None = None, force: bool = False) -> Callable:

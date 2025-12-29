@@ -35,7 +35,14 @@ class KnowledgeMetaData:
             return chunks
 
         self.trunks = split_string_into_chunks(self.content, chunk_size=size)
-        self.trunks_embedding = APIBackend().create_embedding(input_content=self.trunks)
+        try:
+            self.trunks_embedding = APIBackend().create_embedding(input_content=self.trunks)
+        except Exception as e:
+            # 如果embedding创建失败，使用零向量作为fallback
+            import warnings
+            import numpy as np
+            warnings.warn(f"Failed to create trunk embeddings: {e}. Using zero vectors as fallback.")
+            self.trunks_embedding = [np.zeros(768) for _ in self.trunks]
 
     def create_embedding(self):
         """
@@ -45,7 +52,15 @@ class KnowledgeMetaData:
 
         """
         if self.embedding is None:
-            self.embedding = APIBackend().create_embedding(input_content=self.content)
+            try:
+                self.embedding = APIBackend().create_embedding(input_content=self.content)
+            except Exception as e:
+                # 如果embedding创建失败（例如API不可用），使用空向量作为fallback
+                # 这样可以确保系统继续运行，只是RAG检索效果会降低
+                import warnings
+                warnings.warn(f"Failed to create embedding: {e}. Using empty vector as fallback.")
+                import numpy as np
+                self.embedding = np.zeros(768)  # 使用768维的零向量作为fallback
 
     def from_dict(self, data: dict):
         for key, value in data.items():
@@ -64,7 +79,16 @@ def contents_to_documents(contents: List[str], label: str = None) -> List[Docume
     size = 16
     embedding = []
     for i in range(0, len(contents), size):
-        embedding.extend(APIBackend().create_embedding(input_content=contents[i : i + size]))
+        try:
+            emb = APIBackend().create_embedding(input_content=contents[i : i + size])
+            embedding.extend(emb)
+        except Exception as e:
+            # 如果embedding创建失败，使用零向量作为fallback
+            import warnings
+            import numpy as np
+            warnings.warn(f"Failed to create embedding for batch {i}: {e}. Using zero vectors as fallback.")
+            batch_size = min(size, len(contents) - i)
+            embedding.extend([np.zeros(768) for _ in range(batch_size)])
     docs = [Document(content=c, label=label, embedding=e) for c, e in zip(contents, embedding)]
     return docs
 

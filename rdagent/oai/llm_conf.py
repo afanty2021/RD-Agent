@@ -13,7 +13,9 @@ class LLMSettings(ExtendedBaseSettings):
     backend: str = "rdagent.oai.backend.LiteLLMAPIBackend"
 
     chat_model: str = "gpt-4-turbo"
-    embedding_model: str = "text-embedding-3-small"
+    # Default embedding model - optimized for local Ollama BGE-M3 deployment
+    # Can be overridden via EMBEDDING_MODEL environment variable
+    embedding_model: str = "ollama/bge-m3"  # Local Ollama: 1.58GB, 8191 ctx, 1024 dim
 
     reasoning_effort: Literal["low", "medium", "high"] | None = None
     enable_response_schema: bool = True
@@ -42,8 +44,10 @@ class LLMSettings(ExtendedBaseSettings):
     retry_wait_seconds: int = 1
     dump_chat_cache: bool = False
     use_chat_cache: bool = False
-    dump_embedding_cache: bool = False
-    use_embedding_cache: bool = False
+    # Enable embedding cache for local Ollama deployment (highly recommended)
+    # Reduces redundant API calls and speeds up repeated queries
+    dump_embedding_cache: bool = True
+    use_embedding_cache: bool = True
     prompt_cache_path: str = str(Path.cwd() / "prompt_cache.db")
     max_past_message_include: int = 10
     timeout_fail_limit: int = 10
@@ -79,13 +83,14 @@ class LLMSettings(ExtendedBaseSettings):
     """Some models (like o1) do not support the 'system' role.
     Therefore, we make the system_prompt_role customizable to ensure successful calls."""
 
-    # Embedding configs
-    embedding_openai_api_key: str = ""
-    embedding_openai_base_url: str = ""
+    # Embedding configs - optimized for M4 Pro + 48GB unified memory
+    embedding_openai_api_key: str = "ollama"  # Default for local Ollama
+    embedding_openai_base_url: str = "http://localhost:11434"  # Ollama local endpoint
     embedding_azure_api_base: str = ""
     embedding_azure_api_version: str = ""
-    embedding_max_str_num: int = 50
-    embedding_max_length: int = 8192
+    # Increased batch size for local deployment (48GB memory can handle it)
+    embedding_max_str_num: int = 100  # Increased from 50 for better throughput
+    embedding_max_length: int = 8192  # BGE-M3 supports 8191 tokens
 
     # offline llama2 related config
     use_llama2: bool = False

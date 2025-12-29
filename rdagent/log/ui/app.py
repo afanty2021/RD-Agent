@@ -234,9 +234,9 @@ def get_msgs_until(end_func: Callable[[Message], bool] = lambda _: True):
                         none_num = total_len - len(msg.content)
                         right_num = 0
                         for wsf in msg.content:
-                            if wsf.final_decision:
+                            if wsf is not None and wsf.final_decision:
                                 right_num += 1
-                        wrong_num = len(msg.content) - right_num
+                        wrong_num = len([wsf for wsf in msg.content if wsf is not None]) - right_num
                         state.e_decisions[state.lround][state.erounds[state.lround]] = (
                             right_num,
                             wrong_num,
@@ -453,10 +453,10 @@ def summary_window():
                 if show_true_only and len(state.hypotheses) >= len(state.metric_series):
                     if state.alpha_baseline_metrics is not None:
                         selected = ["Alpha Base"] + [
-                            i for i in df.index if i == "Baseline" or state.h_decisions[int(i[6:])]
+                            i for i in df.index if i in ["Baseline", "Alpha Base"] or (i.startswith("Hypothesis") and state.h_decisions[int(i.split()[-1])])
                         ]
                     else:
-                        selected = [i for i in df.index if i == "Baseline" or state.h_decisions[int(i[6:])]]
+                        selected = [i for i in df.index if i in ["Baseline", "Alpha Base"] or (i.startswith("Hypothesis") and state.h_decisions[int(i.split()[-1])])]
                     df = df.loc[selected]
                 if df.shape[0] == 1:
                     st.table(df.iloc[0])
@@ -471,7 +471,8 @@ def summary_window():
     elif isinstance(state.scenario, GeneralModelScenario):
         with st.container(border=True):
             st.subheader("Summary📊", divider="rainbow", anchor="_summary")
-            if len(state.msgs[state.lround]["evolving code"]) > 0:
+            if (len(state.msgs[state.lround].get("evolving code", [])) > 0 and
+                len(state.msgs[state.lround].get("evolving feedback", [])) > 0):
                 # pass
                 ws: list[FactorFBWorkspace | ModelFBWorkspace] = state.msgs[state.lround]["evolving code"][-1].content
                 # All Tasks
@@ -480,8 +481,10 @@ def summary_window():
                     w.target_task.factor_name if isinstance(w.target_task, FactorTask) else w.target_task.name
                     for w in ws
                 ]
-                for j in range(len(ws)):
-                    if state.msgs[state.lround]["evolving feedback"][-1].content[j].final_decision:
+                feedback_list = state.msgs[state.lround]["evolving feedback"][-1].content
+                for j in range(min(len(ws), len(feedback_list))):
+                    feedback = feedback_list[j]
+                    if feedback is not None and feedback.final_decision:
                         tab_names[j] += "✔️"
                     else:
                         tab_names[j] += "❌"
@@ -495,7 +498,8 @@ def summary_window():
                                 st.code(v, language="python")
 
                         # Evolving Feedback
-                        evolving_feedback_window(state.msgs[state.lround]["evolving feedback"][-1].content[j])
+                        if j < len(feedback_list):
+                            evolving_feedback_window(feedback_list[j])
 
 
 def tabs_hint():
@@ -701,6 +705,12 @@ def evolving_window():
         else:
             evolving_round = 1
 
+        # Check if evolving code exists for this round
+        if ("evolving code" not in state.msgs[round] or
+            len(state.msgs[round]["evolving code"]) < evolving_round):
+            st.warning(f"No evolving code data available for round {evolving_round}")
+            return
+
         ws: list[FactorFBWorkspace | ModelFBWorkspace] = state.msgs[round]["evolving code"][evolving_round - 1].content
         # All Tasks
 
@@ -709,7 +719,8 @@ def evolving_window():
         ]
         if len(state.msgs[round]["evolving feedback"]) >= evolving_round:
             for j in range(len(ws)):
-                if state.msgs[round]["evolving feedback"][evolving_round - 1].content[j].final_decision:
+                feedback = state.msgs[round]["evolving feedback"][evolving_round - 1].content[j]
+                if feedback is not None and feedback.final_decision:
                     tab_names[j] += "✔️"
                 else:
                     tab_names[j] += "❌"
@@ -726,7 +737,9 @@ def evolving_window():
 
                 # Evolving Feedback
                 if len(state.msgs[round]["evolving feedback"]) >= evolving_round:
-                    evolving_feedback_window(state.msgs[round]["evolving feedback"][evolving_round - 1].content[j])
+                    feedback_list = state.msgs[round]["evolving feedback"][evolving_round - 1].content
+                    if j < len(feedback_list):
+                        evolving_feedback_window(feedback_list[j])
 
 
 toc = """
@@ -882,6 +895,11 @@ def analyze_task_completion():
         if max_evolving_round == 0:
             continue
 
+        # Check if evolving feedback exists and has data
+        if ("evolving feedback" not in state.msgs[loop_round] or
+            len(state.msgs[loop_round]["evolving feedback"]) == 0):
+            continue
+
         # Track tasks that pass in each evolving round
         tasks_passed_by_round = {}
         cumulative_passed = set()
@@ -895,7 +913,7 @@ def analyze_task_completion():
                 # Count passed tasks and track their indices
                 passed_tasks = set()
                 for j, task_feedback in enumerate(feedback):
-                    if task_feedback.final_decision:
+                    if task_feedback is not None and task_feedback.final_decision:
                         passed_tasks.add(j)
                         cumulative_passed.add(j)
 
@@ -907,8 +925,10 @@ def analyze_task_completion():
                     "cumulative_indices": cumulative_passed.copy(),
                 }
 
+        # Get total tasks from first feedback round
+        total_tasks = len(state.msgs[loop_round]["evolving feedback"][0].content) if state.msgs[loop_round]["evolving feedback"] else 0
         completion_stats[loop_round] = {
-            "total_tasks": len(state.msgs[loop_round]["evolving feedback"][0].content),
+            "total_tasks": total_tasks,
             "rounds": tasks_passed_by_round,
             "max_round": max_evolving_round,
         }
