@@ -1,0 +1,619 @@
+"""
+完整版双因子选股策略
+- 使用完整版因子计算公式（非简化版）
+- 支持直接使用 $amount 字段（如果可用）
+- 函数化调用，模块化设计
+"""
+
+import pandas as pd
+import numpy as np
+import xgboost as xgb
+from datetime import datetime, timedelta
+import warnings
+warnings.filterwarnings('ignore')
+
+# ==================== Qlib 数据获取 ====================
+
+def get_qlib_data(market='csi300', start_date='2023-01-01', end_date=None, use_amount=True):
+    """
+    从 Qlib 获取股票数据
+
+    参数:
+        market: 股票池 ('csi300', 'csi500', 'all')
+        start_date: 开始日期
+        end_date: 结束日期 (默认为今天)
+        use_amount: 是否尝试使用 $amount 字段
+
+    返回:
+        DataFrame with columns: datetime, instrument, $open, $high, $low, $close, $volume, [$amount]
+    """
+    import qlib
+    from qlib.data import D
+
+    # 初始化 Qlib
+    qlib.init(provider_uri='~/.qlib/qlib_data/cn_data', region='cn')
+
+    # 设置结束日期
+    if end_date is None:
+        end_date = datetime.now().strftime('%Y-%m-%d')
+
+    # 获取股票池
+    instruments = D.instruments(market=market)
+    print(f"✓ 股票池: {market.upper()}, 共 {len(instruments)} 只股票")
+
+    # 基础字段
+    base_fields = ['$open', '$high', '$low', '$close', '$volume']
+
+    # 尝试使用 $amount 字段
+    if use_amount:
+        try:
+            # 先尝试获取 $amount
+            test_fields = base_fields + ['$amount']
+            df_test = D.features(
+                instruments=instruments[:10],  # 先用少量股票测试
+                fields=test_fields,
+                start_time=start_date,
+                end_time=end_date
+            )
+            if '$amount' in df_test.columns:
+                print(f"✓ $amount 字段可用，直接使用")
+                fields = base_fields + ['$amount']
+            else:
+                print(f"✗ $amount 字段不可用，将自行计算")
+                fields = base_fields
+                use_amount = False
+        except:
+            print(f"✗ $amount 字段不可用，将自行计算")
+            fields = base_fields
+            use_amount = False
+    else:
+        fields = base_fields
+
+    # 获取完整数据
+    df = D.features(
+        instruments=instruments,
+        fields=fields,
+        start_time=start_date,
+        end_time=end_date
+    )
+    df.columns = fields
+    df = df.reset_index()
+
+    # 如果 $amount 不可用，自己计算
+    if not use_amount and '$amount' not in df.columns:
+        print("✓ 计算 $amount = $close × $volume")
+        df['$amount'] = df['$close'] * df['$volume']
+
+    print(f"✓ 数据时间范围: {df['datetime'].min()} 至 {df['datetime'].max()}")
+    print(f"✓ 数据量: {len(df)} 行")
+    print(f"✓ 数据列: {df.columns.tolist()}")
+
+    return df
+
+
+# ==================== 因子1: 完整版滚动岭回归因子 ====================
+
+def calculate_feature_VAM_15(df):
+    """
+    特征1: VAM_15 - 15日波动率调整动量
+    公式: VAM_{15} = M_{15} / σ_{15}
+    其中 M_{15} = (Close_t - Close_{t-15}) / Close_{t-15}
+         σ_{15} = 15日收益率标准差
+    """
+    print("  - 计算 VAM_15 (15日波动率调整动量)...")
+
+    # 计算日收益率
+    df['daily_return'] = df.groupby('instrument')['$close'].transform(
+        lambda x: x.pct_change(periods=1)
+    )
+
+    # 计算15日动量
+    df['momentum_15'] = df.groupby('instrument')['$close'].transform(
+        lambda x: x.pct_change(periods=15)
+    )
+
+    # 计算15日收益率标准差
+    df['volatility_15'] = df.groupby('instrument')['daily_return'].transform(
+        lambda x: x.rolling(window=15, min_periods=15).std()
+    )
+
+    # VAM_15 = 动量 / 波动率
+    df['VAM_15'] = df['momentum_15'] / df['volatility_15'].replace(0, np.nan)
+
+    return df
+
+
+def calculate_feature_VSVN_5_20(df):
+    """
+    特征2: VSVN_5_20 - 5日成交量激变归一化（相对于20日成交量波动率）
+    公式: VSVN_{5,20} = (Volume_t / MA_5(Volume_{t-5:t-1})) / σ_Volume,20
+    其中 MA_5 是过去5日均值（排除当天）
+         σ_Volume,20 是20日成交量标准差
+    """
+    print("  - 计算 VSVN_5_20 (成交量激变归一化)...")
+
+    # 计算5日成交量均值（排除当天，使用shift(1)）
+    df['volume_ma_5'] = df.groupby('instrument')['$volume'].transform(
+        lambda x: x.shift(1).rolling(window=5, min_periods=1).mean()
+    )
+
+    # 成交量激变 = 当前成交量 / 5日均值
+    df['volume_surge'] = df['$volume'] / df['volume_ma_5'].replace(0, np.nan)
+
+    # 计算20日成交量标准差
+    df['volume_volatility_20'] = df.groupby('instrument')['$volume'].transform(
+        lambda x: x.rolling(window=20, min_periods=20).std()
+    )
+
+    # VSVN_5_20 = 成交量激变 / 成交量波动率
+    df['VSVN_5_20'] = df['volume_surge'] / df['volume_volatility_20'].replace(0, np.nan)
+
+    return df
+
+
+def calculate_feature_DDM_20(df):
+    """
+    特征3: DDM_20 - 20日下行偏差调整动量
+    公式: DDM_{20} = M_{20} / DD_{20}
+    其中 M_{20} = (Close_t - Close_{t-20}) / Close_{t-20}
+         DD_{20} = sqrt(1/20 × Σ(min(R_i, 0))²), i=1 to 20
+         R_i 是第i天的收益率
+    """
+    print("  - 计算 DDM_20 (20日下行偏差调整动量)...")
+
+    # 计算20日动量
+    df['momentum_20'] = df.groupby('instrument')['$close'].transform(
+        lambda x: x.pct_change(periods=20)
+    )
+
+    # 计算日收益率（用于下行偏差）
+    df['daily_return'] = df.groupby('instrument')['$close'].transform(
+        lambda x: x.pct_change()
+    )
+
+    # 计算20日下行偏差
+    # 下行偏差 = sqrt(平均值(负收益率的平方))
+    def downside_deviation(returns):
+        """计算下行偏差（只考虑负收益）"""
+        negative_returns = returns[returns < 0]
+        if len(negative_returns) == 0:
+            return np.nan
+        return np.sqrt((negative_returns ** 2).mean())
+
+    df['downside_deviation_20'] = df.groupby('instrument')['daily_return'].transform(
+        lambda x: x.rolling(window=20, min_periods=20).apply(downside_deviation)
+    )
+
+    # DDM_20 = 动量 / 下行偏差
+    df['DDM_20'] = df['momentum_20'] / df['downside_deviation_20'].replace(0, np.nan)
+
+    return df
+
+
+def calculate_feature_RSI_10(df):
+    """
+    特征4: RSI_10 - 10日相对强弱指标
+    公式: RSI_{10} = 100 - 100 / (1 + RS)
+    其中 RS = SMA(Gain, 10) / SMA(Loss, 10)
+         Gain = max(Close_t - Close_{t-1}, 0)
+         Loss = max(Close_{t-1} - Close_t, 0)
+         SMA 使用简单移动平均
+    """
+    print("  - 计算 RSI_10 (10日相对强弱指标)...")
+
+    # 计算价格变化
+    df['price_change'] = df.groupby('instrument')['$close'].transform(
+        lambda x: x.diff()
+    )
+
+    # 分离涨跌
+    df['gain'] = df['price_change'].apply(lambda x: x if x > 0 else 0)
+    df['loss'] = df['price_change'].apply(lambda x: -x if x < 0 else 0)
+
+    # 计算平均涨跌（使用SMA）
+    df['avg_gain_10'] = df.groupby('instrument')['gain'].transform(
+        lambda x: x.rolling(window=10, min_periods=10).mean()
+    )
+    df['avg_loss_10'] = df.groupby('instrument')['loss'].transform(
+        lambda x: x.rolling(window=10, min_periods=10).mean()
+    )
+
+    # 计算RS
+    df['RS'] = df['avg_gain_10'] / df['avg_loss_10'].replace(0, np.nan)
+
+    # 计算RSI
+    df['RSI_10'] = 100 - 100 / (1 + df['RS'])
+
+    return df
+
+
+def calculate_ridge_regression_factor(df, lambda_reg=0.1, window=60):
+    """
+    完整版滚动岭回归因子
+
+    参数:
+        df: 包含 $open, $high, $low, $close, $volume 的数据
+        lambda_reg: L2正则化参数，默认0.1
+        window: 滚动窗口大小，默认60天
+
+    公式:
+        F_t = β_{0,t} + β_{1,t}×VAM_{15,t} + β_{2,t}×VSVN_{5,20,t} + β_{3,t}×DDM_{20,t} + β_{4,t}×RSI_{10,t}
+
+        其中 β_t 通过岭回归估计:
+        β_t = (X'X + λI)^(-1) X'Y
+
+        X 是特征矩阵 [VAM_15, VSVN_5_20, DDM_20, RSI_10]
+        Y 是目标变量（次日收益率）
+        λ 是正则化参数
+        I 是单位矩阵
+    """
+    print("\n🧮 计算岭回归因子...")
+
+    df_reset = df.copy()
+    df_reset = df_reset.sort_values(['instrument', 'datetime'])
+
+    # 计算四个特征
+    df_reset = calculate_feature_VAM_15(df_reset)
+    df_reset = calculate_feature_VSVN_5_20(df_reset)
+    df_reset = calculate_feature_DDM_20(df_reset)
+    df_reset = calculate_feature_RSI_10(df_reset)
+
+    # 计算目标变量：次日收益率
+    df_reset['next_day_return'] = df_reset.groupby('instrument')['$close'].transform(
+        lambda x: x.pct_change().shift(-1)
+    )
+
+    # 特征列表
+    features = ['VAM_15', 'VSVN_5_20', 'DDM_20', 'RSI_10']
+
+    print(f"  - 执行滚动岭回归 (窗口={window}天, λ={lambda_reg})...")
+
+    def rolling_ridge_regression(group):
+        """对单个股票执行滚动岭回归"""
+        group = group.copy()
+        group['Ridge_Factor'] = np.nan
+
+        for i in range(window, len(group)):
+            # 获取历史数据：t-window 到 t-1
+            X = group[features].iloc[i-window:i].values  # (window, 4)
+            Y = group['next_day_return'].iloc[i-window:i].values  # (window,)
+
+            # 移除包含NaN的行
+            valid_mask = ~np.isnan(X).any(axis=1) & ~np.isnan(Y)
+            X_valid = X[valid_mask]
+            Y_valid = Y[valid_mask]
+
+            # 至少需要20个有效观测值
+            if len(X_valid) >= 20:
+                # 添加截距项
+                X_with_intercept = np.column_stack([np.ones(len(X_valid)), X_valid])
+
+                try:
+                    # 岭回归: β = (X'X + λI)^(-1) X'Y
+                    XtX = X_with_intercept.T @ X_with_intercept
+                    reg_matrix = lambda_reg * np.eye(XtX.shape[0])
+
+                    # 计算回归系数
+                    beta = np.linalg.inv(XtX + reg_matrix) @ X_with_intercept.T @ Y_valid
+
+                    # 计算当前因子值
+                    current_features = group[features].iloc[i].values
+                    current_with_intercept = np.concatenate([[1], current_features])
+
+                    factor_value = current_with_intercept @ beta
+                    group.iloc[i, group.columns.get_loc('Ridge_Factor')] = factor_value
+
+                except np.linalg.LinAlgError:
+                    # 矩阵奇异，跳过
+                    continue
+                except Exception as e:
+                    continue
+
+        return group
+
+    # 对每只股票应用滚动回归
+    df_reset = df_reset.groupby('instrument', group_keys=False).apply(rolling_ridge_regression)
+
+    return df_reset[['datetime', 'instrument', 'Ridge_Factor']]
+
+
+# ==================== 因子2: 完整版XGBoost波动率制度因子 ====================
+
+def calculate_xgboost_volatility_factor(df, max_depth=6, learning_rate=0.1, n_estimators=100):
+    """
+    完整版XGBoost波动率制度因子
+
+    参数:
+        df: 包含 $open, $high, $low, $close, $volume 的数据
+        max_depth: XGBoost树的最大深度
+        learning_rate: 学习率
+        n_estimators: 树的数量
+
+    方法:
+        1. 计算日内波动率 = High - Low
+        2. 计算过去20日波动率中位数作为基准
+        3. 计算未来5日平均波动率作为目标
+        4. 构造30个滞后特征（价格、成交量、动量各10个滞后）
+        5. 训练XGBoost分类器预测高/低波动率制度
+        6. 输出高波动率制度概率作为因子值
+    """
+    print("\n🧮 计算XGBoost波动率制度因子...")
+
+    df_reset = df.copy()
+    df_reset = df_reset.sort_values(['instrument', 'datetime'])
+
+    # 计算日内波动率和动量
+    df_reset['daily_range'] = df_reset['$high'] - df_reset['$low']
+    df_reset['daily_momentum'] = df_reset.groupby('instrument')['$close'].transform(
+        lambda x: x.pct_change()
+    )
+
+    # 计算过去20日波动率中位数（基准）
+    df_reset['range_median_20d'] = df_reset.groupby('instrument')['daily_range'].transform(
+        lambda x: x.rolling(window=20, min_periods=20).median()
+    )
+
+    # 计算未来5日平均波动率（目标变量）
+    df_reset['range_avg_next_5d'] = df_reset.groupby('instrument')['daily_range'].transform(
+        lambda x: x.shift(-5).rolling(window=5, min_periods=5).mean()
+    )
+
+    # 目标变量：二分类（1=未来5日高波动，0=未来5日低波动）
+    df_reset['target'] = (df_reset['range_avg_next_5d'] > df_reset['range_median_20d']).astype(int)
+
+    # 构造30个滞后特征
+    print("  - 构造滞后特征 (10个滞后 × 3个变量 = 30个特征)...")
+    feature_cols = []
+
+    for lag in range(1, 11):  # lag 1 to 10
+        # 价格范围滞后
+        df_reset[f'range_lag_{lag}'] = df_reset.groupby('instrument')['daily_range'].transform(
+            lambda x: x.shift(lag)
+        )
+
+        # 成交量滞后
+        df_reset[f'volume_lag_{lag}'] = df_reset.groupby('instrument')['$volume'].transform(
+            lambda x: x.shift(lag)
+        )
+
+        # 动量滞后
+        df_reset[f'momentum_lag_{lag}'] = df_reset.groupby('instrument')['daily_momentum'].transform(
+            lambda x: x.shift(lag)
+        )
+
+        feature_cols.extend([f'range_lag_{lag}', f'volume_lag_{lag}', f'momentum_lag_{lag}'])
+
+    # 移除包含NaN的行
+    df_features = df_reset.dropna(subset=feature_cols + ['target']).copy()
+    df_features = df_features.sort_values('datetime')
+
+    if len(df_features) == 0:
+        print("  ✗ 没有有效数据用于训练")
+        return pd.DataFrame(columns=['datetime', 'instrument', 'XGBoost_Factor'])
+
+    # 时间序列分割（避免前瞻偏差）
+    unique_dates = sorted(df_features['datetime'].unique())
+    split_idx = int(len(unique_dates) * 0.7)
+    train_dates = set(unique_dates[:split_idx])
+
+    train_mask = df_features['datetime'].isin(train_dates)
+
+    X_train = df_features[train_mask][feature_cols]
+    y_train = df_features[train_mask]['target']
+
+    print(f"  - 训练集: {len(X_train)} 样本")
+    print(f"  - 测试集: {len(df_features[~train_mask])} 样本")
+
+    # 训练XGBoost分类器
+    print(f"  - 训练XGBoost模型 (max_depth={max_depth}, n_estimators={n_estimators})...")
+    model = xgb.XGBClassifier(
+        max_depth=max_depth,
+        learning_rate=learning_rate,
+        n_estimators=n_estimators,
+        random_state=42,
+        verbosity=0
+    )
+    model.fit(X_train, y_train)
+
+    # 对所有数据点预测
+    print("  - 预测所有数据点...")
+    df_all_features = df_reset.dropna(subset=feature_cols).copy()
+
+    if len(df_all_features) > 0:
+        X_all = df_all_features[feature_cols]
+
+        # 预测概率（属于高波动率制度的概率）
+        df_all_features['XGBoost_Factor'] = model.predict_proba(X_all)[:, 1]
+
+        return df_all_features[['datetime', 'instrument', 'XGBoost_Factor']]
+
+    return pd.DataFrame(columns=['datetime', 'instrument', 'XGBoost_Factor'])
+
+
+# ==================== 因子组合与选股 ====================
+
+def combine_and_standardize_factors(ridge_df, xgb_df, ridge_weight=0.5, xgb_weight=0.5):
+    """
+    合并两个因子并进行标准化
+
+    参数:
+        ridge_df: 岭回归因子数据
+        xgb_df: XGBoost因子数据
+        ridge_weight: 岭回归因子权重
+        xgb_weight: XGBoost因子权重
+
+    方法:
+        1. 内连接合并两个因子
+        2. 对每个日期进行横截面Z-score标准化
+        3. 按权重组合
+    """
+    print("\n📊 合并和标准化因子...")
+
+    # 合并数据
+    combined = pd.merge(
+        ridge_df,
+        xgb_df,
+        on=['datetime', 'instrument'],
+        how='inner'
+    )
+
+    print(f"  ✓ 合并后数据量: {len(combined)} 行")
+
+    # 横截面Z-score标准化
+    combined['Ridge_zscore'] = combined.groupby('datetime')['Ridge_Factor'].transform(
+        lambda x: (x - x.mean()) / x.std()
+    )
+    combined['XGBoost_zscore'] = combined.groupby('datetime')['XGBoost_Factor'].transform(
+        lambda x: (x - x.mean()) / x.std()
+    )
+
+    # 处理无穷值和NaN
+    combined['Ridge_zscore'] = combined['Ridge_zscore'].replace([np.inf, -np.inf], np.nan).fillna(0)
+    combined['XGBoost_zscore'] = combined['XGBoost_zscore'].replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    # 按权重组合
+    combined['Combined_Factor'] = (
+        combined['Ridge_zscore'] * ridge_weight +
+        combined['XGBoost_zscore'] * xgb_weight
+    )
+
+    return combined
+
+
+def select_stocks(combined_df, date, top_n=50, min_zscore=0.5):
+    """
+    选股函数
+
+    参数:
+        combined_df: 合并因子数据
+        date: 选股日期
+        top_n: 选出前N只股票
+        min_zscore: 最低因子得分阈值
+
+    返回:
+        stocks: 选中的股票列表
+        details: 详细信息DataFrame
+    """
+    # 获取指定日期的数据
+    date_data = combined_df[combined_df['datetime'] == date].copy()
+
+    if len(date_data) == 0:
+        print(f"\n✗ 警告: {date} 没有数据")
+        return [], None
+
+    # 过滤：因子值必须大于阈值
+    filtered = date_data[date_data['Combined_Factor'] >= min_zscore]
+
+    if len(filtered) == 0:
+        # 如果没有股票达到阈值，选择top_n
+        filtered = date_data.nlargest(top_n, 'Combined_Factor')
+        print(f"\n  注意: 没有股票达到阈值 {min_zscore}，选择top{top_n}")
+    else:
+        # 从符合条件的股票中选择top_n
+        filtered = filtered.nlargest(top_n, 'Combined_Factor')
+
+    stocks = filtered['instrument'].tolist()
+
+    print(f"\n{'='*70}")
+    print(f"📈 {date} 选股结果")
+    print(f"{'='*70}")
+    print(f"  股票池总数: {len(date_data)}")
+    print(f"  符合阈值(>={min_zscore}): {len(date_data[date_data['Combined_Factor'] >= min_zscore])}")
+    print(f"  最终选中: {len(stocks)}只")
+    print(f"\n  前10只股票:")
+    print(f"  {'排名':<6}{'代码':<12}{'综合得分':<10}{'岭回归':<10}{'XGBoost':<10}")
+    print(f"  {'-'*60}")
+
+    for i, (idx, row) in enumerate(filtered.head(10).iterrows(), 1):
+        stock = row['instrument']
+        score = row['Combined_Factor']
+        ridge_score = row['Ridge_zscore']
+        xgb_score = row['XGBoost_zscore']
+        print(f"  {i:<6}{stock:<12}{score:>8.2f}    {ridge_score:>8.2f}    {xgb_score:>8.2f}")
+
+    print(f"{'='*70}")
+
+    return stocks, filtered
+
+
+# ==================== 主程序 ====================
+
+def main():
+    """主程序入口"""
+    print("="*70)
+    print("🤖 完整版双因子选股策略")
+    print("="*70)
+
+    # 1. 获取数据
+    print("\n📥 步骤 1/4: 获取Qlib数据...")
+    df = get_qlib_data(
+        market='csi300',
+        start_date='2024-01-01',
+        end_date='2025-11-29',
+        use_amount=True  # 尝试使用 $amount
+    )
+
+    # 2. 计算岭回归因子
+    print("\n📊 步骤 2/4: 计算岭回归因子...")
+    ridge_factor = calculate_ridge_regression_factor(
+        df,
+        lambda_reg=0.1,  # L2正则化参数
+        window=60         # 滚动窗口
+    )
+    print(f"  ✓ 岭回归因子计算完成")
+
+    # 3. 计算XGBoost因子
+    print("\n📊 步骤 3/4: 计算XGBoost波动率制度因子...")
+    xgb_factor = calculate_xgboost_volatility_factor(
+        df,
+        max_depth=6,
+        learning_rate=0.1,
+        n_estimators=100
+    )
+    print(f"  ✓ XGBoost因子计算完成")
+
+    # 4. 合并因子
+    print("\n📊 步骤 4/4: 合并因子并选股...")
+    combined = combine_and_standardize_factors(
+        ridge_factor,
+        xgb_factor,
+        ridge_weight=0.5,
+        xgb_weight=0.5
+    )
+
+    # 保存因子数据
+    output_file = 'complete_factors.csv'
+    combined.to_csv(output_file, index=False)
+    print(f"\n  ✓ 因子数据已保存: {output_file}")
+
+    # 选股
+    latest_date = combined['datetime'].max()
+    stocks, details = select_stocks(
+        combined,
+        latest_date,
+        top_n=50,
+        min_zscore=0.5
+    )
+
+    # 保存选股结果
+    if details is not None:
+        result_file = f'stock_selection_{latest_date.strftime("%Y%m%d")}.csv'
+        details.to_csv(result_file, index=False, encoding='utf-8-sig')
+        print(f"\n  ✓ 选股结果已保存: {result_file}")
+
+    print("\n" + "="*70)
+    print("✅ 选股完成！")
+    print("="*70)
+
+    return combined, stocks, details
+
+
+if __name__ == '__main__':
+    try:
+        combined, stocks, details = main()
+    except KeyboardInterrupt:
+        print("\n\n⚠️  用户中断")
+    except Exception as e:
+        print(f"\n❌ 发生错误: {e}")
+        import traceback
+        traceback.print_exc()
