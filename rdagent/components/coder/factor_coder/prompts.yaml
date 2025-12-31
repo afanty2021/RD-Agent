@@ -5,7 +5,40 @@
 # 2. 纯正向引导（只展示正确的 datetime 用法）
 # 3. 增加正确的代码示例数量
 # 4. 简化说明，减少认知负荷
+# 5. 新增：复合因子引导（财务+行业+技术）
 #
+
+# ==================== 复合因子优先级引导 ====================
+
+composite_factor_priority_guidance: |-
+  CRITICAL - MULTI-SOURCE DATA STRATEGY:
+
+  To achieve higher IC and better returns, your factors should COMBINE multiple data sources:
+
+  1. Technical Factors (price/volume): Short-term trading signals
+  2. Financial Factors (fundamentals): Long-term value metrics
+  3. Industry Factors (sector trends): Context-aware market signals
+  4. Interaction Factors: Synergy effects between different domains
+
+  RESEARCH-BACKED COMBINATIONS (Highest Alpha Potential):
+  - Value + Momentum: Low PE/PB stocks with strong price momentum
+  - Quality + Growth: High ROE/ROA + High revenue/earnings growth
+  - Industry Rotation: Sector momentum + relative strength to peers
+  - Multi-Factor: Combine 3+ different signal sources with optimal weights
+
+  PRIORITY ORDER FOR FACTOR SELECTION:
+  1. Financial + Technical combinations (proven alpha source)
+  2. Industry-neutral factors (reduces sector bias)
+  3. Cross-sectional normalization (mandatory for all factors)
+  4. Interaction effects (captures non-linear relationships)
+
+  EXAMPLE SUCCESSFUL FACTORS:
+  - "Value_Momentum": PE_percentile × Momentum_zscore
+  - "Quality_Growth": ROE_zscore + Revenue_Growth_zscore
+  - "Industry_Leader": Stock_return - Industry_return (relative strength)
+  - "Fundamental_Trend": ROE + ROE_change (trending quality)
+
+# ==================== 原有系统提示词 ====================
 
 evolving_strategy_factor_implementation_v1_system: |-
   User is trying to implement some factors in the following scenario:
@@ -23,7 +56,32 @@ evolving_strategy_factor_implementation_v1_system: |-
   The data has a MultiIndex structure with index names: ['datetime', 'instrument']
   - First level: 'datetime' (time index)
   - Second level: 'instrument' (stock/instrument identifier)
-  - Data columns include: '$close', '$open', '$high', '$low', '$volume', etc.
+
+  AVAILABLE DATA COLUMNS (29 total columns):
+
+  1. Price/Volume Data (6 columns):
+     - '$open', '$close', '$high', '$low', '$volume', '$factor'
+
+  2. Financial Data (22 columns) - ALREADY INCLUDED IN daily_pv.h5:
+     - Valuation: 'PE', 'PB', 'PS', 'PCF' (市盈率、市净率、市销率、市现率)
+     - Profitability: 'ROE', 'ROA', 'ROIC', 'NetProfitMargin', 'GrossProfitMargin'
+     - Growth: 'EPS_Growth', 'CFPS_Growth', 'NetProfit_Growth', 'OP_Growth'
+     - Solvency: 'DebtToAssets', 'CurrentRatio', 'QuickRatio', 'OCF_To_Debt'
+     - Efficiency: 'AssetsTurnover', 'AR_Turnover', 'CA_Turnover'
+     - Basic Metrics: 'EPS', 'BPS', 'OCFPS', 'CFPS'
+     - Other: 'EBITDA'
+
+  3. Report Period Dates (2 columns):
+     - 'end_date': Financial report end date
+     - 'ann_date': Financial report announcement date
+
+  IMPORTANT: You can DIRECTLY use financial columns like 'ROE', 'PE', 'DebtToAssets', etc.
+  They are already in the daily_pv.h5 file - no need to load separate files!
+
+  RECOMMENDED STRATEGY (for higher IC):
+  1. Combine Technical + Financial factors (e.g., ROE + Momentum)
+  2. Use Industry-neutral factors (reduces sector bias)
+  3. Apply cross-sectional normalization to all factors
 
   INDEX HANDLING (follow these steps exactly):
   1. Load data: df = pd.read_hdf('daily_pv.h5', key='data')
@@ -32,7 +90,138 @@ evolving_strategy_factor_implementation_v1_system: |-
   4. Perform your factor calculations using df_reset
   5. Restore index: result = df_reset.set_index(['datetime', 'instrument'])[['FactorName']]
 
-  EXAMPLE 1 - Basic Momentum Factor:
+  ==================== RECOMMENDED: COMPOSITE FACTORS (HIGHEST IC) ====================
+
+  EXAMPLE 1 - Value + Momentum Composite (RECOMMENDED - Proven Alpha):
+  ```python
+  def calculate_Value_Momentum_Combo():
+      """
+      价值+动量组合因子
+
+      学术界和业界公认的最有效因子组合之一。
+      结合价值投资（低PE）和趋势跟踪（强动量）的优势。
+      """
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # 价值信号：PE分位数倒数（低PE=高价值）
+      df_reset['PE_percentile'] = df_reset.groupby('datetime')['PE'].transform(
+          lambda x: x.rank(pct=True)
+      )
+      df_reset['value_signal'] = 1 - df_reset['PE_percentile']
+
+      # 动量信号：20日收益率标准化
+      df_reset['momentum_20d'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=20)
+      )
+      df_reset['momentum_signal'] = df_reset.groupby('datetime')['momentum_20d'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+
+      # 组合：价值(40%) + 动量(60%)
+      df_reset['Value_Momentum_Combo'] = (
+          df_reset['value_signal'] * 0.4 +
+          df_reset['momentum_signal'] * 0.6
+      )
+
+      # 过滤无效数据
+      df_valid = df_reset[df_reset['PE'].notna()].copy()
+      df_valid['Value_Momentum_Combo'] = df_valid['Value_Momentum_Combo'].replace([np.inf, -np.inf], np.nan)
+
+      result = df_valid.set_index(['datetime', 'instrument'])[['Value_Momentum_Combo']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  EXAMPLE 2 - ROE + Momentum Composite (Quality + Trend):
+  ```python
+  def calculate_ROE_Momentum_Combo():
+      """
+      ROE质量+动量组合因子
+
+      寻找高质量且有趋势的股票。
+      ROE反映公司盈利能力，动量反映价格趋势。
+      """
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # 质量信号：ROE标准化
+      df_reset['ROE_zscore'] = df_reset.groupby('datetime')['ROE'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+
+      # 动量信号：20日收益率
+      df_reset['momentum_20d'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=20)
+      )
+      df_reset['momentum_signal'] = df_reset.groupby('datetime')['momentum_20d'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+
+      # 组合：质量(35%) + 动量(65%)
+      df_reset['ROE_Momentum_Combo'] = (
+          df_reset['ROE_zscore'] * 0.35 +
+          df_reset['momentum_signal'] * 0.65
+      )
+
+      df_reset['ROE_Momentum_Combo'] = df_reset['ROE_Momentum_Combo'].replace([np.inf, -np.inf], np.nan)
+
+      result = df_reset.set_index(['datetime', 'instrument'])[['ROE_Momentum_Combo']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  EXAMPLE 3 - Industry Relative Strength (Sector-Neutral):
+  ```python
+  def calculate_Industry_Relative_Strength():
+      """
+      行业相对强度因子
+
+      计算股票相对其所在行业的表现。
+      正值表示跑赢行业，负值表示落后行业。
+      """
+      import pandas as pd
+      import numpy as np
+      import json
+      from pathlib import Path
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # 加载申万2021 L2行业分类（110个二级行业）
+      industry_file = Path.home() / '.qlib/qlib_data/cn_data/industry_data/tushare_stock_to_industry_dict_20251229_161019.json'
+      with open(industry_file) as f:
+          industry_mapping = json.load(f)
+
+      df_reset['industry_l2'] = df_reset['instrument'].map(
+          lambda x: industry_mapping.get(x.replace('.', ''), {}).get('industry_l2', 'Unknown')
+      )
+
+      # 只处理有行业分类的股票
+      df_valid = df_reset[df_reset['industry_l2'] != 'Unknown'].copy()
+
+      # 计算个股收益率
+      df_valid['stock_return'] = df_valid.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=10)
+      )
+
+      # 计算行业平均收益率
+      industry_return = df_valid.groupby(['datetime', 'industry_l2'])['stock_return'].transform('mean')
+
+      # 相对强度 = 个股收益 - 行业收益
+      df_valid['Industry_Relative_Strength'] = df_valid['stock_return'] - industry_return
+
+      result = df_valid.set_index(['datetime', 'instrument'])[['Industry_Relative_Strength']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  ==================== BASIC TECHNICAL FACTORS (Simpler, but lower IC) ====================
+
+  EXAMPLE 4 - Basic Momentum Factor:
   ```python
   def calculate_Momentum():
       import pandas as pd
@@ -51,30 +240,7 @@ evolving_strategy_factor_implementation_v1_system: |-
       result.to_hdf('result.h5', key='data')
   ```
 
-  EXAMPLE 2 - Moving Average Factor:
-  ```python
-  def calculate_MA_Trend():
-      import pandas as pd
-      import numpy as np
-
-      df = pd.read_hdf('daily_pv.h5', key='data')
-      df_reset = df.reset_index()
-
-      # Calculate moving averages
-      df_reset['ma_short'] = df_reset.groupby('instrument')['$close'].transform(
-          lambda x: x.rolling(window=10).mean()
-      )
-      df_reset['ma_long'] = df_reset.groupby('instrument')['$close'].transform(
-          lambda x: x.rolling(window=30).mean()
-      )
-      df_reset['MA_Trend'] = df_reset['ma_short'] / df_reset['ma_long']
-
-      # Restore MultiIndex
-      result = df_reset.set_index(['datetime', 'instrument'])[['MA_Trend']]
-      result.to_hdf('result.h5', key='data')
-  ```
-
-  EXAMPLE 3 - Volatility Factor:
+  EXAMPLE 5 - Moving Average Factor:
   ```python
   def calculate_Volatility():
       import pandas as pd
@@ -410,6 +576,139 @@ evolving_strategy_factor_implementation_v1_system: |-
       result.to_hdf('result.h5', key='data')
   ```
 
+  ==================== 报告期概念（REPORT PERIOD CONCEPT） ====================
+
+  CRITICAL - FINANCIAL DATA HANDLING (READ CAREFULLY):
+
+  Financial data is QUARTERLY by nature (not daily):
+  - Companies publish quarterly reports: Q1, Q2 (semi-annual), Q3, Q4 (annual)
+  - Each report is announced 1-2 months AFTER the reporting period ends
+  - Data coverage is naturally sparse (~1.6% of trading days have new reports)
+
+  CORRECT APPROACH - REPORT PERIOD METHOD:
+  1. DO NOT forward-fill quarterly financial data to daily frequency
+  2. At any date t, use "the latest report ANNOUNCED on or before date t"
+  3. This preserves information availability and avoids look-ahead bias
+
+  USE REPORT PERIOD ACCESSOR FOR FINANCIAL FACTORS:
+
+  ```python
+  from rdagent.scenarios.qlib.experiment.report_period_utils import ReportPeriodAccessor
+
+  # Load report period data
+  df = pd.read_hdf('daily_pv_report_period.h5', key='data')
+  accessor = ReportPeriodAccessor(df)
+
+  # Get financial data available at specific date
+  def calculate_ROE_Factor():
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv_report_period.h5', key='data')
+      accessor = ReportPeriodAccessor(df)
+
+      # Get unique dates
+      dates = df.index.get_level_values(0).unique()
+      instruments = df.index.get_level_values(1).unique()
+
+      result_list = []
+
+      for date in dates:
+          # Get ROE for all stocks at this date
+          # (Uses the latest report announced on or before this date)
+          roe_values = {}
+          for instrument in instruments:
+              roe = accessor.get_financial_at_date(instrument, str(date.date()), 'ROE')
+              if roe is not None:
+                  roe_values[instrument] = roe
+
+          # Convert to Series and normalize cross-sectionally
+          if roe_values:
+              roe_series = pd.Series(roe_values)
+              roe_zscore = (roe_series - roe_series.mean()) / (roe_series.std() + 1e-12)
+
+              for instrument, zscore in roe_zscore.items():
+                  result_list.append({
+                      'datetime': date,
+                      'instrument': instrument,
+                      'ROE_Factor': zscore
+                  })
+
+      result_df = pd.DataFrame(result_list)
+      result = result_df.set_index(['datetime', 'instrument'])[['ROE_Factor']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  EXAMPLE - ROE MOMENTUM FACTOR (Year-over-Year Change):
+
+  ```python
+  def calculate_ROE_Momentum():
+      """Calculate ROE change compared to 1 year ago"""
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv_report_period.h5', key='data')
+      accessor = ReportPeriodAccessor(df)
+
+      dates = df.index.get_level_values(0).unique()
+      instruments = list(accessor.report_map.keys())
+
+      result_list = []
+
+      for date in dates:
+          roe_momentum = {}
+          date_str = str(date.date())
+
+          for instrument in instruments:
+              # Get current ROE
+              current_roe = accessor.get_financial_at_date(instrument, date_str, 'ROE')
+              if current_roe is None:
+                  continue
+
+              # Get report info to find announcement date
+              report_info = accessor.get_report_info(instrument, date_str)
+              if report_info['announce_date'] is None:
+                  continue
+
+              # Calculate target date (~1 year ago)
+              target_date = report_info['announce_date'] - pd.Timedelta(days=365)
+
+              # Get past ROE
+              past_roe = accessor.get_financial_at_date(
+                  instrument, target_date.strftime('%Y-%m-%d'), 'ROE'
+              )
+
+              if past_roe is None or past_roe == 0:
+                  continue
+
+              # Calculate momentum
+              momentum = (current_roe - past_roe) / abs(past_roe)
+              roe_momentum[instrument] = momentum
+
+          # Cross-sectional normalization
+          if roe_momentum:
+              momentum_series = pd.Series(roe_momentum)
+              momentum_zscore = (momentum_series - momentum_series.mean()) / (momentum_series.std() + 1e-12)
+
+              for instrument, zscore in momentum_zscore.items():
+                  result_list.append({
+                      'datetime': date,
+                      'instrument': instrument,
+                      'ROE_Momentum': zscore
+                  })
+
+      result_df = pd.DataFrame(result_list)
+      result = result_df.set_index(['datetime', 'instrument'])[['ROE_Momentum']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  FINANCIAL DATA FORMAT:
+  - File: daily_pv_report_period.h5 (use this for report period approach)
+  - Structure: MultiIndex(datetime, instrument)
+  - Financial fields: ROE, EPS, DebtToAssets, CurrentRatio, etc.
+  - Coverage: ~0.44% (quarterly data on announcement dates only)
+  - Fields available: 21 financial metrics + 6 price fields
+
   AVAILABLE FINANCIAL DATA:
   Financial metrics are typically available in:
   - Location: Financial data files (financial_data.csv, financial_data.h5)
@@ -435,11 +734,221 @@ evolving_strategy_factor_implementation_v1_system: |-
   - HDF5: pd.read_hdf('financial_data.h5', key='data')
   - Excel: pd.read_excel('financial_data.xlsx')
 
+  ==================== 复合因子示例（RECOMMENDED） ====================
+
+  COMPOSITE FACTOR EXAMPLE 1 - Value + Momentum (High Alpha):
+  ```python
+  def calculate_Value_Momentum_Combo():
+      """
+      价值+动量组合因子
+
+      结合价值投资（低PE）和趋势跟踪（强动量）的优势。
+      这是学术界和业界公认的最有效的因子组合之一。
+      """
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv_financial.h5', key='data')
+      df_reset = df.reset_index()
+
+      # 价值信号：PE分位数倒数（低PE=高价值）
+      df_reset['PE_percentile'] = df_reset.groupby('datetime')['PE'].transform(
+          lambda x: x.rank(pct=True)
+      )
+      df_reset['value_signal'] = 1 - df_reset['PE_percentile']
+
+      # 动量信号：20日收益率标准化
+      df_reset['momentum_20d'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=20)
+      )
+      df_reset['momentum_signal'] = df_reset.groupby('datetime')['momentum_20d'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+
+      # 组合：价值(40%) + 动量(60%)
+      df_reset['Value_Momentum_Combo'] = (
+          df_reset['value_signal'] * 0.4 +
+          df_reset['momentum_signal'] * 0.6
+      )
+
+      # 过滤无效数据
+      df_valid = df_reset[df_reset['PE'].notna()].copy()
+      df_valid['Value_Momentum_Combo'] = df_valid['Value_Momentum_Combo'].replace([np.inf, -np.inf], np.nan)
+
+      result = df_valid.set_index(['datetime', 'instrument'])[['Value_Momentum_Combo']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  COMPOSITE FACTOR EXAMPLE 2 - Quality + Growth + Momentum:
+  ```python
+  def calculate_Quality_Growth_Momentum():
+      """
+      质量+成长+动量三因子组合
+
+      寻找高质量、高成长且有趋势的股票。
+      这是基本面投资和动量投资的完美结合。
+      """
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv_financial.h5', key='data')
+      df_reset = df.reset_index()
+
+      # 质量信号：ROE和ROA的标准化组合
+      df_reset['ROE_zscore'] = df_reset.groupby('datetime')['ROE'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+      df_reset['ROA_zscore'] = df_reset.groupby('datetime')['ROA'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+      df_reset['quality_signal'] = (df_reset['ROE_zscore'] + df_reset['ROA_zscore']) / 2
+
+      # 动量信号
+      df_reset['momentum_20d'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=20)
+      )
+      df_reset['momentum_signal'] = df_reset.groupby('datetime')['momentum_20d'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+
+      # 组合：质量(35%) + 动量(65%)
+      df_reset['Quality_Momentum'] = (
+          df_reset['quality_signal'] * 0.35 +
+          df_reset['momentum_signal'] * 0.65
+      )
+
+      df_reset['Quality_Momentum'] = df_reset['Quality_Momentum'].replace([np.inf, -np.inf], np.nan)
+
+      result = df_reset.set_index(['datetime', 'instrument'])[['Quality_Momentum']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  COMPOSITE FACTOR EXAMPLE 3 - Industry-Relative Value:
+  ```python
+  def calculate_Industry_Relative_Value():
+      """
+      行业相对价值因子
+
+      在同一行业内比较估值，寻找相对低估的股票。
+      这样可以消除行业偏差，更公平地比较估值水平。
+      """
+      import pandas as pd
+      import numpy as np
+      import json
+      from pathlib import Path
+
+      df = pd.read_hdf('daily_pv_financial.h5', key='data')
+      df_reset = df.reset_index()
+
+      # 加载行业分类
+      industry_file = Path.home() / '.qlib/qlib_data/cn_data/industry_data/tushare_stock_to_industry_dict_20251229_161019.json'
+      with open(industry_file) as f:
+          industry_mapping = json.load(f)
+
+      df_reset['industry_l2'] = df_reset['instrument'].map(
+          lambda x: industry_mapping.get(x.replace('.', ''), {}).get('industry_l2', 'Unknown')
+      )
+
+      # 计算行业内PE分位数
+      df_reset['PE_percentile_within_industry'] = df_reset.groupby(['datetime', 'industry_l2'])['PE'].transform(
+          lambda x: x.rank(pct=True)
+      )
+
+      # 行业相对价值 = 1 - 行业内PE分位数
+      # 值越高表示相对行业内越低估
+      df_reset['Industry_Relative_Value'] = 1 - df_reset['PE_percentile_within_industry']
+
+      # 过滤
+      df_valid = df_reset[
+          (df_reset['industry_l2'] != 'Unknown') &
+          (df_reset['PE'].notna())
+      ].copy()
+
+      result = df_valid.set_index(['datetime', 'instrument'])[['Industry_Relative_Value']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  COMPOSITE FACTOR EXAMPLE 4 - Multi-Score Alpha Factor:
+  ```python
+  def calculate_Multi_Score_Alpha():
+      """
+      多维度综合评分因子
+
+      综合考虑价值、质量、动量、行业四个维度。
+      这是机构投资者常用的多因子选股方法。
+      """
+      import pandas as pd
+      import numpy as np
+      import json
+      from pathlib import Path
+
+      df = pd.read_hdf('daily_pv_financial.h5', key='data')
+      df_reset = df.reset_index()
+
+      # 加载行业分类
+      industry_file = Path.home() / '.qlib/qlib_data/cn_data/industry_data/tushare_stock_to_industry_dict_20251229_161019.json'
+      with open(industry_file) as f:
+          industry_mapping = json.load(f)
+
+      df_reset['industry_l2'] = df_reset['instrument'].map(
+          lambda x: industry_mapping.get(x.replace('.', ''), {}).get('industry_l2', 'Unknown')
+      )
+
+      # 1. 价值维度（PE, PB）
+      for metric in ['PE', 'PB']:
+          df_reset[f'{metric}_zscore'] = df_reset.groupby('datetime')[metric].transform(
+              lambda x: (x - x.mean()) / (x.std() + 1e-12)
+          )
+      df_reset['value_score'] = -(df_reset['PE_zscore'] + df_reset['PB_zscore']) / 2  # 负号：低估值更好
+
+      # 2. 质量维度（ROE, ROA）
+      for metric in ['ROE', 'ROA']:
+          df_reset[f'{metric}_zscore'] = df_reset.groupby('datetime')[metric].transform(
+              lambda x: (x - x.mean()) / (x.std() + 1e-12)
+          )
+      df_reset['quality_score'] = (df_reset['ROE_zscore'] + df_reset['ROA_zscore']) / 2
+
+      # 3. 动量维度
+      df_reset['momentum_20d'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=20)
+      )
+      df_reset['momentum_score'] = df_reset.groupby('datetime')['momentum_20d'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+
+      # 4. 行业动量维度
+      df_reset['stock_return_5d'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=5)
+      )
+      df_reset['industry_momentum'] = df_reset.groupby(['datetime', 'industry_l2'])['stock_return_5d'].transform('mean')
+
+      # 综合评分：价值(25%) + 质量(25%) + 动量(35%) + 行业(15%)
+      df_reset['Multi_Score_Alpha'] = (
+          df_reset['value_score'] * 0.25 +
+          df_reset['quality_score'] * 0.25 +
+          df_reset['momentum_score'] * 0.35 +
+          df_reset['industry_momentum'] * 0.15
+      )
+
+      # 过滤
+      df_valid = df_reset[
+          (df_reset['industry_l2'] != 'Unknown') &
+          (df_reset['PE'].notna()) &
+          (df_reset['ROE'].notna())
+      ].copy()
+
+      df_valid['Multi_Score_Alpha'] = df_valid['Multi_Score_Alpha'].replace([np.inf, -np.inf], np.nan)
+
+      result = df_valid.set_index(['datetime', 'instrument'])[['Multi_Score_Alpha']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
   IMPORTANT NOTES:
   - Always use reset_index() before groupby operations
   - Always use set_index(['datetime', 'instrument']) to restore the MultiIndex
   - Factor column names should be static (no parameters in the name)
   - Use groupby().transform() for window calculations
+  - COMPOSITE FACTORS ARE HIGHLY RECOMMENDED for better IC and returns
 
   To help you write the correct code, the user might provide multiple information that helps you write the correct code:
   1. The user might provide you the correct code to similar factors. Your should learn from these code to write the correct code.

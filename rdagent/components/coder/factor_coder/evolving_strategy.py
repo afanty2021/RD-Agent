@@ -92,10 +92,16 @@ class FactorMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
         latest_attempt_to_latest_successful_execution = queried_knowledge.task_to_former_failed_traces[
             target_factor_task_information
         ][1]
-        system_prompt = T(".prompts:evolving_strategy_factor_implementation_v1_system").r(
+
+        # Load composite factor priority guidance and add it to system prompt
+        composite_guidance = T(".prompts:composite_factor_priority_guidance").r()
+        system_prompt_base = T(".prompts:evolving_strategy_factor_implementation_v1_system").r(
             scenario=self.scen.get_scenario_all_desc(target_task, filtered_tag="feature"),
             queried_former_failed_knowledge=queried_former_failed_knowledge_to_render,
         )
+
+        # Prepend composite factor guidance to ensure LLM sees it first
+        system_prompt = composite_guidance + "\n\n" + system_prompt_base
         queried_similar_successful_knowledge_to_render = queried_similar_successful_knowledge
         queried_similar_error_knowledge_to_render = queried_similar_error_knowledge
         # 动态地防止prompt超长
