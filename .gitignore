@@ -196,4 +196,4 @@ AGENTS.md
 *.csv
 *.output
 financial_data*.csv
-industry_lookup.csv
+industry_lookup.csv.serena/
