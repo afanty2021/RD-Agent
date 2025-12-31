@@ -1,0 +1,1024 @@
+# 改进的因子编码提示词 - 使用纯正向引导策略
+#
+# 核心改进：
+# 1. 移除所有负面强化（不再说"不要用 date"）
+# 2. 纯正向引导（只展示正确的 datetime 用法）
+# 3. 增加正确的代码示例数量
+# 4. 简化说明，减少认知负荷
+# 5. 新增：复合因子引导（财务+行业+技术）
+#
+
+# ==================== 复合因子优先级引导 ====================
+
+composite_factor_priority_guidance: |-
+  CRITICAL - MULTI-SOURCE DATA STRATEGY:
+
+  To achieve higher IC and better returns, your factors should COMBINE multiple data sources:
+
+  1. Technical Factors (price/volume): Short-term trading signals
+  2. Financial Factors (fundamentals): Long-term value metrics
+  3. Industry Factors (sector trends): Context-aware market signals
+  4. Interaction Factors: Synergy effects between different domains
+
+  RESEARCH-BACKED COMBINATIONS (Highest Alpha Potential):
+  - Value + Momentum: Low PE/PB stocks with strong price momentum
+  - Quality + Growth: High ROE/ROA + High revenue/earnings growth
+  - Industry Rotation: Sector momentum + relative strength to peers
+  - Multi-Factor: Combine 3+ different signal sources with optimal weights
+
+  PRIORITY ORDER FOR FACTOR SELECTION:
+  1. Financial + Technical combinations (proven alpha source)
+  2. Industry-neutral factors (reduces sector bias)
+  3. Cross-sectional normalization (mandatory for all factors)
+  4. Interaction effects (captures non-linear relationships)
+
+  EXAMPLE SUCCESSFUL FACTORS:
+  - "Value_Momentum": PE_percentile × Momentum_zscore
+  - "Quality_Growth": ROE_zscore + Revenue_Growth_zscore
+  - "Industry_Leader": Stock_return - Industry_return (relative strength)
+  - "Fundamental_Trend": ROE + ROE_change (trending quality)
+
+# ==================== 原有系统提示词 ====================
+
+evolving_strategy_factor_implementation_v1_system: |-
+  User is trying to implement some factors in the following scenario:
+  {{ scenario }}
+  Your code is expected to align the scenario in any form which means The user needs to get the exact factor values with your code as expected.
+
+  CRITICAL: Your code MUST include the following import statements at the beginning:
+  ```python
+  import pandas as pd
+  import numpy as np
+  ```
+  Do NOT forget these imports - they are required for all factor implementations.
+
+  DATA STRUCTURE:
+  The data has a MultiIndex structure with index names: ['datetime', 'instrument']
+  - First level: 'datetime' (time index)
+  - Second level: 'instrument' (stock/instrument identifier)
+  - Data columns include: '$close', '$open', '$high', '$low', '$volume', etc.
+
+  INDEX HANDLING (follow these steps exactly):
+  1. Load data: df = pd.read_hdf('daily_pv.h5', key='data')
+  2. Reset index: df_reset = df.reset_index()
+  3. Now df_reset has columns: ['datetime', 'instrument', '$close', '$open', ...]
+  4. Perform your factor calculations using df_reset
+  5. Restore index: result = df_reset.set_index(['datetime', 'instrument'])[['FactorName']]
+
+  EXAMPLE 1 - Basic Momentum Factor:
+  ```python
+  def calculate_Momentum():
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # Calculate momentum
+      df_reset['Momentum'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=10)
+      )
+
+      # Restore MultiIndex
+      result = df_reset.set_index(['datetime', 'instrument'])[['Momentum']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  EXAMPLE 2 - Moving Average Factor:
+  ```python
+  def calculate_MA_Trend():
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # Calculate moving averages
+      df_reset['ma_short'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.rolling(window=10).mean()
+      )
+      df_reset['ma_long'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.rolling(window=30).mean()
+      )
+      df_reset['MA_Trend'] = df_reset['ma_short'] / df_reset['ma_long']
+
+      # Restore MultiIndex
+      result = df_reset.set_index(['datetime', 'instrument'])[['MA_Trend']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  EXAMPLE 3 - Volatility Factor:
+  ```python
+  def calculate_Volatility():
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # Calculate rolling volatility
+      df_reset['Volatility'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.rolling(window=20).std()
+      )
+
+      # Restore MultiIndex
+      result = df_reset.set_index(['datetime', 'instrument'])[['Volatility']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  EXAMPLE 4 - Industry Momentum Factor (Using Shenwan 2021 L2 Industry Classification):
+  ```python
+  def calculate_Industry_Momentum():
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # Load Shenwan 2021 L2 (Level-2) industry mapping from Tushare
+      # L2 industries provide finer granularity (110 sub-industries)
+      # Data source: Tushare Pro API (真实数据，覆盖5466只A股)
+      try:
+          from industry_map_l2_tushare import INDUSTRY_MAP_L2_TUSHARE
+          industry_mapping = INDUSTRY_MAP_L2_TUSHARE
+      except ImportError:
+          # Fallback: load from Tushare JSON file directly
+          from pathlib import Path
+          import json
+          mapping_file = Path.home() / '.qlib/qlib_data/cn_data/industry_data/tushare_stock_to_industry_dict_20251229_161019.json'
+          with open(mapping_file) as f:
+              tushare_mapping = json.load(f)
+          # Convert to simple dict
+          industry_mapping = {
+              f"{k.split('.')[0]}{k.split('.')[1]}": v.get('industry_l2', 'Unknown')
+              for k, v in tushare_mapping.items()
+          }
+
+      # Map instruments to L2 industries
+      df_reset['industry'] = df_reset['instrument'].map(industry_mapping)
+
+      # Calculate individual stock returns (5-day momentum)
+      df_reset['return_5d'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=5)
+      )
+
+      # Calculate L2 industry average return (industry momentum)
+      # This shows how each sub-industry is performing
+      industry_mom = df_reset.groupby(['datetime', 'industry'])['return_5d'].transform('mean')
+
+      # Assign industry momentum to each stock
+      df_reset['Industry_Momentum'] = industry_mom.values
+
+      # Restore MultiIndex
+      result = df_reset.set_index(['datetime', 'instrument'])[['Industry_Momentum']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  EXAMPLE 5 - Industry Relative Strength Factor (Using Shenwan 2021 L2 Industry):
+  ```python
+  def calculate_Industry_Relative_Strength():
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # Load Shenwan 2021 L2 industry mapping from Tushare
+      # Data source: Tushare Pro API (110 sub-industries, 5466 stocks)
+      try:
+          from industry_map_l2_tushare import INDUSTRY_MAP_L2_TUSHARE
+          industry_mapping = INDUSTRY_MAP_L2_TUSHARE
+      except ImportError:
+          # Load from Tushare JSON file
+          from pathlib import Path
+          import json
+          mapping_file = Path.home() / '.qlib/qlib_data/cn_data/industry_data/tushare_stock_to_industry_dict_20251229_161019.json'
+          with open(mapping_file) as f:
+              tushare_mapping = json.load(f)
+          industry_mapping = {
+              f"{k.split('.')[0]}{k.split('.')[1]}": v.get('industry_l2', 'Unknown')
+              for k, v in tushare_mapping.items()
+          }
+
+      df_reset['industry'] = df_reset['instrument'].map(industry_mapping)
+
+      # Only process stocks with valid industry classification
+      df_valid = df_reset[df_reset['industry'].notna()].copy()
+
+      # Calculate individual stock return (10-day)
+      df_valid['stock_return'] = df_valid.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=10)
+      )
+
+      # Calculate L2 industry average return
+      industry_return = df_valid.groupby(['datetime', 'industry'])['stock_return'].transform('mean')
+
+      # Calculate relative strength: stock return - industry return
+      # Positive values indicate outperformance relative to sub-industry peers
+      df_valid['Industry_Relative_Strength'] = df_valid['stock_return'] - industry_return
+
+      # Restore MultiIndex
+      result = df_valid.set_index(['datetime', 'instrument'])[['Industry_Relative_Strength']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  AVAILABLE INDUSTRY DATA:
+  - Location: ~/.qlib/qlib_data/cn_data/industry_data/
+  - Data Source: Tushare Pro API (真实数据 - REAL DATA)
+  - Coverage: 5,466 A-shares (全覆盖 - COMPLETE COVERAGE)
+
+  - Shenwan 2021 Classifications (RECOMMENDED - Most Accurate):
+    * L2 (Level 2): 110 sub-industries (当前使用 - CURRENTLY USED)
+      示例：电气设备, 元器件, 软件服务, 专用机械, 汽车配件, 化工原料, 半导体, etc.
+      映射文件：industry_map_l2_tushare.py (基于Tushare真实数据)
+
+    * L1 (Level 1): 29 major industries
+      示例：机械设备, 电子, 医药生物, 化工, 汽车, 计算机, etc.
+      Top L1: 机械设备(969), 电子(569), 医药生物(511), 化工(418)
+
+    * Data Quality: Real-time from Tushare, updated daily
+    * Source Files:
+      - tushare_stock_to_industry_dict_*.json (完整映射)
+      - tushare_industry_to_stocks_dict_*.json (反向查询)
+
+  - Usage: Just import and use it directly:
+    ```python
+    from industry_map_l2_tushare import INDUSTRY_MAP_L2_TUSHARE
+    df_reset['industry'] = df_reset['instrument'].map(INDUSTRY_MAP_L2_TUSHARE)
+
+    # Or use Tushare data directly
+    from pathlib import Path
+    import json
+    mapping_file = Path.home() / '.qlib/qlib_data/cn_data/industry_data/tushare_stock_to_industry_dict_20251229_161019.json'
+    with open(mapping_file) as f:
+        tushare_mapping = json.load(f)
+    ```
+
+  EXAMPLE 6 - Financial Factor: PE Ratio (Price to Earnings):
+  ```python
+  def calculate_PE_Ratio():
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # Load financial data (EPS - Earnings Per Share)
+      # Financial data files typically contain: PE, PB, PS, ROE, ROA, etc.
+      # You can merge financial data with price data
+      try:
+          financial_df = pd.read_csv('financial_data.csv')
+          # Ensure financial_df has columns: datetime, instrument, PE, PB, ROE, etc.
+          df_reset = df_reset.merge(financial_df, on=['datetime', 'instrument'], how='left')
+      except FileNotFoundError:
+          # If no financial data file, calculate PE from EPS if available
+          # PE = Price / EPS
+          # For this example, we'll use a placeholder
+          df_reset['PE_Ratio'] = df_reset['$close'] / df_reset.get('EPS', df_reset['$close'])
+
+      # Handle missing values
+      df_reset['PE_Ratio'] = df_reset['PE_Ratio'].replace([np.inf, -np.inf], np.nan)
+
+      result = df_reset.set_index(['datetime', 'instrument'])[['PE_Ratio']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  EXAMPLE 7 - Financial Factor: ROE (Return on Equity):
+  ```python
+  def calculate_ROE_Factor():
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # ROE (Return on Equity) = Net Income / Shareholder Equity
+      # This measures how efficiently a company uses shareholder capital
+
+      # Option 1: Load from financial data file
+      try:
+          financial_df = pd.read_csv('financial_data.csv')
+          df_reset = df_reset.merge(financial_df, on=['datetime', 'instrument'], how='left')
+          # If ROE column exists, use it directly
+          if 'ROE' in df_reset.columns:
+              df_reset['ROE'] = df_reset['ROE']
+      except FileNotFoundError:
+          # Option 2: Calculate from basic financial metrics
+          # ROE = Net Profit / Total Equity
+          # For this example, use a placeholder calculation
+          df_reset['ROE'] = 0.15  # Placeholder: 15% average ROE
+
+      # Normalize ROE to z-score within each time period
+      df_reset['ROE_ZScore'] = df_reset.groupby('datetime')['ROE'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+
+      result = df_reset.set_index(['datetime', 'instrument'])[['ROE_ZScore']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  EXAMPLE 8 - Financial Factor: Revenue Growth Rate:
+  ```python
+  def calculate_Revenue_Growth():
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # Revenue Growth Rate measures how fast a company's revenue is growing
+      # Revenue Growth = (Current Revenue - Previous Revenue) / Previous Revenue
+
+      try:
+          # Load financial data with revenue information
+          financial_df = pd.read_csv('financial_data.csv')
+          df_reset = df_reset.merge(financial_df, on=['datetime', 'instrument'], how='left')
+
+          # Calculate year-over-year revenue growth
+          df_reset = df_reset.sort_values(['instrument', 'datetime'])
+          df_reset['Revenue_Growth'] = df_reset.groupby('instrument')['Revenue'].transform(
+              lambda x: x.pct_change(periods=4)  # 4 quarters = 1 year
+          )
+
+          # Fill missing values with forward fill then backward fill
+          df_reset['Revenue_Growth'] = df_reset.groupby('instrument')['Revenue_Growth'].transform(
+              lambda x: x.ffill().bfill()
+          )
+
+      except (FileNotFoundError, KeyError):
+          # If no revenue data, use price growth as a proxy
+          df_reset['Revenue_Growth'] = df_reset.groupby('instrument')['$close'].transform(
+              lambda x: x.pct_change(periods=250)  # Approximate yearly growth
+          )
+
+      # Cap extreme values
+      df_reset['Revenue_Growth'] = df_reset['Revenue_Growth'].clip(lower=-0.5, upper=2.0)
+
+      result = df_reset.set_index(['datetime', 'instrument'])[['Revenue_Growth']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  EXAMPLE 9 - Financial Factor: Debt to Asset Ratio:
+  ```python
+  def calculate_Debt_Ratio():
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # Debt to Asset Ratio = Total Debt / Total Assets
+      # Measures a company's financial leverage and risk
+
+      try:
+          financial_df = pd.read_csv('financial_data.csv')
+          df_reset = df_reset.merge(financial_df, on=['datetime', 'instrument'], how='left')
+
+          if 'Debt_Ratio' in df_reset.columns:
+              df_reset['Debt_Ratio'] = df_reset['Debt_Ratio']
+          elif 'Total_Debt' in df_reset.columns and 'Total_Assets' in df_reset.columns:
+              df_reset['Debt_Ratio'] = df_reset['Total_Debt'] / df_reset['Total_Assets']
+          else:
+              raise ValueError("Required financial columns not found")
+
+      except (FileNotFoundError, ValueError):
+          # Use placeholder values for demonstration
+          # In practice, companies typically have debt ratios between 0.2 and 0.8
+          import random
+          np.random.seed(42)
+          df_reset['Debt_Ratio'] = np.random.uniform(0.3, 0.7, len(df_reset))
+
+      # Lower debt ratio is generally better (less financial risk)
+      # So we can use the inverse as a factor
+      df_reset['Financial_Health'] = 1 - df_reset['Debt_Ratio']
+
+      result = df_reset.set_index(['datetime', 'instrument'])[['Financial_Health']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  EXAMPLE 10 - Combined Financial Factor (Fundamental Score):
+  ```python
+  def calculate_Fundamental_Score():
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv.h5', key='data')
+      df_reset = df.reset_index()
+
+      # Combine multiple financial metrics into a single score
+      # This provides a comprehensive view of company fundamentals
+
+      try:
+          financial_df = pd.read_csv('financial_data.csv')
+          df_reset = df_reset.merge(financial_df, on=['datetime', 'instrument'], how='left')
+
+          # Calculate z-scores for each metric
+          metrics = ['ROE', 'ROA', 'Revenue_Growth', 'PE_Ratio', 'Debt_Ratio']
+
+          for metric in metrics:
+              if metric in df_reset.columns:
+                  df_reset[f'{metric}_zscore'] = df_reset.groupby('datetime')[metric].transform(
+                      lambda x: (x - x.mean()) / (x.std() + 1e-12)
+                  )
+
+          # Combine metrics (adjust weights and signs as needed)
+          # Higher ROE, ROA, Revenue Growth is positive
+          # Lower PE and Debt Ratio is positive (so we use negative for PE and Debt)
+
+          df_reset['Fundamental_Score'] = (
+              df_reset.get('ROE_zscore', 0) * 0.3 +
+              df_reset.get('ROA_zscore', 0) * 0.2 +
+              df_reset.get('Revenue_Growth_zscore', 0) * 0.2 +
+              df_reset.get('PE_Ratio_zscore', 0) * (-0.15) +  # Lower PE is better
+              df_reset.get('Debt_Ratio_zscore', 0) * (-0.15)  # Lower debt is better
+          )
+
+      except FileNotFoundError:
+          # If no financial data, use momentum as a proxy for fundamentals
+          df_reset['Fundamental_Score'] = df_reset.groupby('instrument')['$close'].transform(
+              lambda x: x.pct_change(periods=20)
+          )
+
+      result = df_reset.set_index(['datetime', 'instrument'])[['Fundamental_Score']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  ==================== 报告期概念（REPORT PERIOD CONCEPT） ====================
+
+  CRITICAL - FINANCIAL DATA HANDLING (READ CAREFULLY):
+
+  Financial data is QUARTERLY by nature (not daily):
+  - Companies publish quarterly reports: Q1, Q2 (semi-annual), Q3, Q4 (annual)
+  - Each report is announced 1-2 months AFTER the reporting period ends
+  - Data coverage is naturally sparse (~1.6% of trading days have new reports)
+
+  CORRECT APPROACH - REPORT PERIOD METHOD:
+  1. DO NOT forward-fill quarterly financial data to daily frequency
+  2. At any date t, use "the latest report ANNOUNCED on or before date t"
+  3. This preserves information availability and avoids look-ahead bias
+
+  USE REPORT PERIOD ACCESSOR FOR FINANCIAL FACTORS:
+
+  ```python
+  from rdagent.scenarios.qlib.experiment.report_period_utils import ReportPeriodAccessor
+
+  # Load report period data
+  df = pd.read_hdf('daily_pv_report_period.h5', key='data')
+  accessor = ReportPeriodAccessor(df)
+
+  # Get financial data available at specific date
+  def calculate_ROE_Factor():
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv_report_period.h5', key='data')
+      accessor = ReportPeriodAccessor(df)
+
+      # Get unique dates
+      dates = df.index.get_level_values(0).unique()
+      instruments = df.index.get_level_values(1).unique()
+
+      result_list = []
+
+      for date in dates:
+          # Get ROE for all stocks at this date
+          # (Uses the latest report announced on or before this date)
+          roe_values = {}
+          for instrument in instruments:
+              roe = accessor.get_financial_at_date(instrument, str(date.date()), 'ROE')
+              if roe is not None:
+                  roe_values[instrument] = roe
+
+          # Convert to Series and normalize cross-sectionally
+          if roe_values:
+              roe_series = pd.Series(roe_values)
+              roe_zscore = (roe_series - roe_series.mean()) / (roe_series.std() + 1e-12)
+
+              for instrument, zscore in roe_zscore.items():
+                  result_list.append({
+                      'datetime': date,
+                      'instrument': instrument,
+                      'ROE_Factor': zscore
+                  })
+
+      result_df = pd.DataFrame(result_list)
+      result = result_df.set_index(['datetime', 'instrument'])[['ROE_Factor']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  EXAMPLE - ROE MOMENTUM FACTOR (Year-over-Year Change):
+
+  ```python
+  def calculate_ROE_Momentum():
+      """Calculate ROE change compared to 1 year ago"""
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv_report_period.h5', key='data')
+      accessor = ReportPeriodAccessor(df)
+
+      dates = df.index.get_level_values(0).unique()
+      instruments = list(accessor.report_map.keys())
+
+      result_list = []
+
+      for date in dates:
+          roe_momentum = {}
+          date_str = str(date.date())
+
+          for instrument in instruments:
+              # Get current ROE
+              current_roe = accessor.get_financial_at_date(instrument, date_str, 'ROE')
+              if current_roe is None:
+                  continue
+
+              # Get report info to find announcement date
+              report_info = accessor.get_report_info(instrument, date_str)
+              if report_info['announce_date'] is None:
+                  continue
+
+              # Calculate target date (~1 year ago)
+              target_date = report_info['announce_date'] - pd.Timedelta(days=365)
+
+              # Get past ROE
+              past_roe = accessor.get_financial_at_date(
+                  instrument, target_date.strftime('%Y-%m-%d'), 'ROE'
+              )
+
+              if past_roe is None or past_roe == 0:
+                  continue
+
+              # Calculate momentum
+              momentum = (current_roe - past_roe) / abs(past_roe)
+              roe_momentum[instrument] = momentum
+
+          # Cross-sectional normalization
+          if roe_momentum:
+              momentum_series = pd.Series(roe_momentum)
+              momentum_zscore = (momentum_series - momentum_series.mean()) / (momentum_series.std() + 1e-12)
+
+              for instrument, zscore in momentum_zscore.items():
+                  result_list.append({
+                      'datetime': date,
+                      'instrument': instrument,
+                      'ROE_Momentum': zscore
+                  })
+
+      result_df = pd.DataFrame(result_list)
+      result = result_df.set_index(['datetime', 'instrument'])[['ROE_Momentum']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  FINANCIAL DATA FORMAT:
+  - File: daily_pv_report_period.h5 (use this for report period approach)
+  - Structure: MultiIndex(datetime, instrument)
+  - Financial fields: ROE, EPS, DebtToAssets, CurrentRatio, etc.
+  - Coverage: ~0.44% (quarterly data on announcement dates only)
+  - Fields available: 21 financial metrics + 6 price fields
+
+  AVAILABLE FINANCIAL DATA:
+  Financial metrics are typically available in:
+  - Location: Financial data files (financial_data.csv, financial_data.h5)
+  - Sources: Company quarterly/annual reports, financial APIs
+  - Common metrics include:
+    * Valuation: PE (市盈率), PB (市净率), PS (市销率), EV/EBITDA
+    * Profitability: ROE (净资产收益率), ROA (总资产收益率), Gross Margin, Net Margin
+    * Growth: Revenue Growth, Net Income Growth, EPS Growth, ROE Change
+    * Solvency: Debt Ratio, Current Ratio, Quick Ratio, Interest Coverage
+    * Efficiency: Asset Turnover, Inventory Turnover, Receivables Turnover
+    * Cash Flow: Operating Cash Flow, Free Cash Flow, Cash Ratio
+
+  EASY WAY TO USE FINANCIAL DATA:
+  If financial data files are available, you can load them using:
+
+  ```python
+  financial_df = pd.read_csv('financial_data.csv')
+  df_reset = df_reset.merge(financial_df, on=['datetime', 'instrument'], how='left')
+  ```
+
+  Common financial data formats:
+  - CSV: pd.read_csv('financial_data.csv')
+  - HDF5: pd.read_hdf('financial_data.h5', key='data')
+  - Excel: pd.read_excel('financial_data.xlsx')
+
+  ==================== 复合因子示例（RECOMMENDED） ====================
+
+  COMPOSITE FACTOR EXAMPLE 1 - Value + Momentum (High Alpha):
+  ```python
+  def calculate_Value_Momentum_Combo():
+      """
+      价值+动量组合因子
+
+      结合价值投资（低PE）和趋势跟踪（强动量）的优势。
+      这是学术界和业界公认的最有效的因子组合之一。
+      """
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv_financial.h5', key='data')
+      df_reset = df.reset_index()
+
+      # 价值信号：PE分位数倒数（低PE=高价值）
+      df_reset['PE_percentile'] = df_reset.groupby('datetime')['PE'].transform(
+          lambda x: x.rank(pct=True)
+      )
+      df_reset['value_signal'] = 1 - df_reset['PE_percentile']
+
+      # 动量信号：20日收益率标准化
+      df_reset['momentum_20d'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=20)
+      )
+      df_reset['momentum_signal'] = df_reset.groupby('datetime')['momentum_20d'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+
+      # 组合：价值(40%) + 动量(60%)
+      df_reset['Value_Momentum_Combo'] = (
+          df_reset['value_signal'] * 0.4 +
+          df_reset['momentum_signal'] * 0.6
+      )
+
+      # 过滤无效数据
+      df_valid = df_reset[df_reset['PE'].notna()].copy()
+      df_valid['Value_Momentum_Combo'] = df_valid['Value_Momentum_Combo'].replace([np.inf, -np.inf], np.nan)
+
+      result = df_valid.set_index(['datetime', 'instrument'])[['Value_Momentum_Combo']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  COMPOSITE FACTOR EXAMPLE 2 - Quality + Growth + Momentum:
+  ```python
+  def calculate_Quality_Growth_Momentum():
+      """
+      质量+成长+动量三因子组合
+
+      寻找高质量、高成长且有趋势的股票。
+      这是基本面投资和动量投资的完美结合。
+      """
+      import pandas as pd
+      import numpy as np
+
+      df = pd.read_hdf('daily_pv_financial.h5', key='data')
+      df_reset = df.reset_index()
+
+      # 质量信号：ROE和ROA的标准化组合
+      df_reset['ROE_zscore'] = df_reset.groupby('datetime')['ROE'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+      df_reset['ROA_zscore'] = df_reset.groupby('datetime')['ROA'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+      df_reset['quality_signal'] = (df_reset['ROE_zscore'] + df_reset['ROA_zscore']) / 2
+
+      # 动量信号
+      df_reset['momentum_20d'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=20)
+      )
+      df_reset['momentum_signal'] = df_reset.groupby('datetime')['momentum_20d'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+
+      # 组合：质量(35%) + 动量(65%)
+      df_reset['Quality_Momentum'] = (
+          df_reset['quality_signal'] * 0.35 +
+          df_reset['momentum_signal'] * 0.65
+      )
+
+      df_reset['Quality_Momentum'] = df_reset['Quality_Momentum'].replace([np.inf, -np.inf], np.nan)
+
+      result = df_reset.set_index(['datetime', 'instrument'])[['Quality_Momentum']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  COMPOSITE FACTOR EXAMPLE 3 - Industry-Relative Value:
+  ```python
+  def calculate_Industry_Relative_Value():
+      """
+      行业相对价值因子
+
+      在同一行业内比较估值，寻找相对低估的股票。
+      这样可以消除行业偏差，更公平地比较估值水平。
+      """
+      import pandas as pd
+      import numpy as np
+      import json
+      from pathlib import Path
+
+      df = pd.read_hdf('daily_pv_financial.h5', key='data')
+      df_reset = df.reset_index()
+
+      # 加载行业分类
+      industry_file = Path.home() / '.qlib/qlib_data/cn_data/industry_data/tushare_stock_to_industry_dict_20251229_161019.json'
+      with open(industry_file) as f:
+          industry_mapping = json.load(f)
+
+      df_reset['industry_l2'] = df_reset['instrument'].map(
+          lambda x: industry_mapping.get(x.replace('.', ''), {}).get('industry_l2', 'Unknown')
+      )
+
+      # 计算行业内PE分位数
+      df_reset['PE_percentile_within_industry'] = df_reset.groupby(['datetime', 'industry_l2'])['PE'].transform(
+          lambda x: x.rank(pct=True)
+      )
+
+      # 行业相对价值 = 1 - 行业内PE分位数
+      # 值越高表示相对行业内越低估
+      df_reset['Industry_Relative_Value'] = 1 - df_reset['PE_percentile_within_industry']
+
+      # 过滤
+      df_valid = df_reset[
+          (df_reset['industry_l2'] != 'Unknown') &
+          (df_reset['PE'].notna())
+      ].copy()
+
+      result = df_valid.set_index(['datetime', 'instrument'])[['Industry_Relative_Value']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  COMPOSITE FACTOR EXAMPLE 4 - Multi-Score Alpha Factor:
+  ```python
+  def calculate_Multi_Score_Alpha():
+      """
+      多维度综合评分因子
+
+      综合考虑价值、质量、动量、行业四个维度。
+      这是机构投资者常用的多因子选股方法。
+      """
+      import pandas as pd
+      import numpy as np
+      import json
+      from pathlib import Path
+
+      df = pd.read_hdf('daily_pv_financial.h5', key='data')
+      df_reset = df.reset_index()
+
+      # 加载行业分类
+      industry_file = Path.home() / '.qlib/qlib_data/cn_data/industry_data/tushare_stock_to_industry_dict_20251229_161019.json'
+      with open(industry_file) as f:
+          industry_mapping = json.load(f)
+
+      df_reset['industry_l2'] = df_reset['instrument'].map(
+          lambda x: industry_mapping.get(x.replace('.', ''), {}).get('industry_l2', 'Unknown')
+      )
+
+      # 1. 价值维度（PE, PB）
+      for metric in ['PE', 'PB']:
+          df_reset[f'{metric}_zscore'] = df_reset.groupby('datetime')[metric].transform(
+              lambda x: (x - x.mean()) / (x.std() + 1e-12)
+          )
+      df_reset['value_score'] = -(df_reset['PE_zscore'] + df_reset['PB_zscore']) / 2  # 负号：低估值更好
+
+      # 2. 质量维度（ROE, ROA）
+      for metric in ['ROE', 'ROA']:
+          df_reset[f'{metric}_zscore'] = df_reset.groupby('datetime')[metric].transform(
+              lambda x: (x - x.mean()) / (x.std() + 1e-12)
+          )
+      df_reset['quality_score'] = (df_reset['ROE_zscore'] + df_reset['ROA_zscore']) / 2
+
+      # 3. 动量维度
+      df_reset['momentum_20d'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=20)
+      )
+      df_reset['momentum_score'] = df_reset.groupby('datetime')['momentum_20d'].transform(
+          lambda x: (x - x.mean()) / (x.std() + 1e-12)
+      )
+
+      # 4. 行业动量维度
+      df_reset['stock_return_5d'] = df_reset.groupby('instrument')['$close'].transform(
+          lambda x: x.pct_change(periods=5)
+      )
+      df_reset['industry_momentum'] = df_reset.groupby(['datetime', 'industry_l2'])['stock_return_5d'].transform('mean')
+
+      # 综合评分：价值(25%) + 质量(25%) + 动量(35%) + 行业(15%)
+      df_reset['Multi_Score_Alpha'] = (
+          df_reset['value_score'] * 0.25 +
+          df_reset['quality_score'] * 0.25 +
+          df_reset['momentum_score'] * 0.35 +
+          df_reset['industry_momentum'] * 0.15
+      )
+
+      # 过滤
+      df_valid = df_reset[
+          (df_reset['industry_l2'] != 'Unknown') &
+          (df_reset['PE'].notna()) &
+          (df_reset['ROE'].notna())
+      ].copy()
+
+      df_valid['Multi_Score_Alpha'] = df_valid['Multi_Score_Alpha'].replace([np.inf, -np.inf], np.nan)
+
+      result = df_valid.set_index(['datetime', 'instrument'])[['Multi_Score_Alpha']]
+      result.to_hdf('result.h5', key='data')
+  ```
+
+  IMPORTANT NOTES:
+  - Always use reset_index() before groupby operations
+  - Always use set_index(['datetime', 'instrument']) to restore the MultiIndex
+  - Factor column names should be static (no parameters in the name)
+  - Use groupby().transform() for window calculations
+  - COMPOSITE FACTORS ARE HIGHLY RECOMMENDED for better IC and returns
+
+  To help you write the correct code, the user might provide multiple information that helps you write the correct code:
+  1. The user might provide you the correct code to similar factors. Your should learn from these code to write the correct code.
+  2. The user might provide you the failed former code and the corresponding feedback to the code. The feedback contains to the execution, the code and the factor value. You should analyze the feedback and try to correct the latest code.
+
+  3. The user might provide you the suggestion to the latest fail code and some similar fail to correct pairs. Each pair contains the fail code with similar error and the corresponding corrected version code. You should learn from these suggestion to write the correct code.
+
+  Your must write your code based on your former latest attempt below which consists of your former code and code feedback, you should read the former attempt carefully and must not modify the right part of your former code.
+
+  Notice that you should not add any other text before or after the json format.
+
+  {% if queried_former_failed_knowledge|length != 0 %}
+  --------------Your former latest attempt:---------------
+  =====Code to the former implementation=====
+  {{ queried_former_failed_knowledge[-1].implementation.all_codes }}
+  =====Feedback to the former implementation=====
+  {{ queried_former_failed_knowledge[-1].feedback }}
+  {% endif %}
+
+  Please response the code in the following json format. Here is an example structure for the JSON output:
+  {
+      "code": "The Python code as a string."
+  }
+
+evaluator_code_feedback_v1_system: |-
+  User is trying to implement some factors in the following scenario:
+  {{ scenario }}
+  User will provide you the information of the factor.
+
+  Your job is to check whether user's code is align with the factor and the scenario.
+  The user will provide the source python code and the execution error message if execution failed.
+
+  The user might provide you the ground truth code for you to provide the critic. You should not leak the ground truth code to the user in any form but you can use it to provide the critic.
+
+  User has also compared the factor values calculated by the user's code and the ground truth code. The user will provide you some analyze result comparing two output. You may find some error in the code which caused the difference between the two output.
+
+  If the ground truth code is provided, your critic should only consider checking whether the user's code is align with the ground truth code since the ground truth is definitely correct.
+  If the ground truth code is not provided, your critic should consider checking whether the user's code is reasonable and correct.
+
+  Notice that your critics are not for user to debug the code. They are sent to the coding agent to correct the code. So don't give any following items for the user to check like "Please check the code line XXX".
+
+  You suggestion should not include any code, just some clear and short suggestions. Please point out very critical issues in your response, ignore non-important issues to avoid confusion. If no big issue found in the code, you can response "No critics found".
+
+  You should provide the suggestion to each of your critic to help the user improve the code. Please response the critic in the following format. Here is an example structure for the output:
+  critic 1: The critic message to critic 1
+  critic 2: The critic message to critic 2
+
+evaluator_code_feedback_v1_user: |-
+  --------------Factor information:---------------
+  {{ factor_information }}
+  --------------Python code:---------------
+  {{ code }}
+  --------------Execution feedback:---------------
+  {{ execution_feedback }}
+  {% if value_feedback is not none %}
+  --------------Factor value feedback:---------------
+  {{ value_feedback }}
+  {% endif %}
+  {% if gt_code is not none %}
+  --------------Ground truth Python code:---------------
+  {{ gt_code }}
+  {% endif %}
+
+evolving_strategy_factor_implementation_v2_user: |-
+  --------------Target factor information:---------------
+  {{ factor_information_str }}
+
+  {% if queried_similar_error_knowledge|length != 0 %}
+  {% if error_summary_critics is none %}
+  Recall your last failure, your implementation met some errors.
+  When doing other tasks, you met some similar errors but you finally solve them. Here are some examples:
+  {% for error_content, similar_error_knowledge in queried_similar_error_knowledge %}
+  --------------Factor information to similar error ({{error_content}}):---------------
+  {{ similar_error_knowledge[0].target_task.get_task_information() }}
+  =====Code with similar error ({{error_content}}):=====
+  {{ similar_error_knowledge[0].implementation.all_codes }}
+  =====Success code to former code with similar error ({{error_content}}):=====
+  {{ similar_error_knowledge[1].implementation.all_codes }}
+  {% endfor %}
+  {% else %}
+  Recall your last failure, your implementation met some errors.
+  After reviewing some similar errors and their solutions, here are some suggestions for you to correct your code:
+  {{error_summary_critics}}
+  {% endif %}
+  {% endif %}
+  {% if queried_similar_successful_knowledge|length != 0 %}
+  Here are some success implements of similar component tasks, take them as references:
+  --------------Correct code to similar factors:---------------
+  {% for similar_successful_knowledge in queried_similar_successful_knowledge %}
+  =====Factor {{loop.index}}:=====
+  {{ similar_successful_knowledge.target_task.get_task_information() }}
+  =====Code:=====
+  {{ similar_successful_knowledge.implementation.all_codes }}
+  {% endfor %}
+  {% endif %}
+  {% if latest_attempt_to_latest_successful_execution is not none %}
+  You have tried to correct your former failed code but still met some errors. Here is the latest attempt to the latest successful execution, try not to get the same error to your new code:
+  =====Your latest attempt=====
+  {{ latest_attempt_to_latest_successful_execution.implementation.all_codes }}
+  =====Feedback to your latest attempt=====
+  {{ latest_attempt_to_latest_successful_execution.feedback }}
+  {% endif %}
+
+evolving_strategy_error_summary_v2_system: |-
+  User is trying to implement some factors in the following scenario:
+  {{ scenario }}
+  User is doing the following task:
+  {{factor_information_str}}
+
+  You have written some code but it meets errors like the following:
+  {{code_and_feedback}}
+
+  The user has found some tasks that met similar errors, and their final correct solutions.
+  Please refer to these similar errors and their solutions, provide some clear, short and accurate critics that might help you solve the issues in your code.
+
+  You suggestion should not include any code, just some clear and short suggestions. Please point out very critical issues in your response, ignore non-important issues to avoid confusion. If no big issue found in the code, you can response "No critics found".
+
+  [NOTE]
+  1. When processing data, avoid time leakage.
+
+  Please response the critic in the following format. Here is an example structure for the output:
+  critic 1: The critic message to critic 1
+  critic 2: The critic message to critic 2
+
+evolving_strategy_error_summary_v2_user: |-
+  {% if queried_similar_error_knowledge|length != 0 %}
+  {% for error_content, similar_error_knowledge in queried_similar_error_knowledge %}
+  --------------Factor information to similar error ({{error_content}}):---------------
+  {{ similar_error_knowledge[0].target_task.get_task_information() }}
+  =====Code with similar error ({{error_content}}):=====
+  {{ similar_error_knowledge[0].implementation.all_codes }}
+  =====Success code to former code with similar error ({{error_content}}):=====
+  {{ similar_error_knowledge[1].implementation.all_codes }}
+  {% endfor %}
+  {% endif %}
+
+
+select_implementable_factor_system: |-
+  User is trying to implement some factors in the following scenario:
+  {{ scenario }}
+  Your job is to help the user select the easiest-to-implement factors. Some factors may be difficult to implement due to a lack of information or excessive complexity. The user will provide the number of factors you should pick and information about the factors, including their descriptions, formulas, and variable explanations.
+  User will provide you the former attempt to implement the factor and the feedback to the implementation. You need to carefully review your previous attempts. Some factors have been repeatedly tried without success. You should consider discarding these factors.
+  Please analyze the difficulties of the each factors and provide the reason and response the indices of selected implementable factor in the json format. Here is an example structure for the JSON output:
+  {
+      "Analysis": "Analyze the difficulties of the each factors and provide the reason why the factor can be implemented or not.",
+      "selected_factor": "The indices of selected factor index in the list, like [0, 2, 3].The length should be the number of factor left after filtering.",
+  }
+
+select_implementable_factor_user: |-
+  Number of factor you should pick: {{ factor_num }}
+  {% for factor_info in sub_tasks %}
+  =============Factor index:{{factor_info[0]}}:=============
+  =====Factor name:=====
+  {{ factor_info[1].factor_name }}
+  =====Factor description:=====
+  {{ factor_info[1].factor_description }}
+  =====Factor formulation:=====
+  {{ factor_info[1].factor_formulation }}
+  {% if factor_info[2]|length != 0 %}
+  --------------Your former attempt:---------------
+  {% for former_attempt in factor_info[2] %}
+  =====Code to attempt {{ loop.index }}=====
+  {{ former_attempt.implementation.all_codes }}
+  =====Feedback to attempt {{ loop.index }}=====
+  {{ former_attempt.feedback }}
+  {% endfor %}
+  {% endif %}
+  {% endfor %}
+
+evaluator_output_format_system: |-
+  User is trying to implement some factors in the following scenario:
+  {{ scenario }}
+  User will provide you the format of the output. Please help to check whether the output is align with the format.
+  Please respond in the JSON format. Here is an example structure for the JSON output:
+  {
+      "output_format_decision": True,
+      "output_format_feedback": "The output format is correct."
+  }
+
+
+evaluator_final_decision_v1_system: |-
+  User is trying to implement some factors in the following scenario:
+  {{ scenario }}
+  User has finished evaluation and got some feedback from the evaluator.
+  The evaluator run the code and get the factor value dataframe and provide several feedback regarding user's code and code output. You should analyze the feedback and considering the scenario and factor description to give a final decision about the evaluation result. The final decision concludes whether the factor is implemented correctly and if not, detail feedback containing reason and suggestion if the final decision is False.
+
+  The implementation final decision is considered in the following logic:
+  1. If the value and the ground truth value are exactly the same under a small tolerance, the implementation is considered correct.
+  2. If the value and the ground truth value have a high correlation on ic or rank ic, the implementation is considered correct.
+  3. If no ground truth value is provided, the implementation is considered correct if the code executes successfully (assuming the data provided is correct). Any exceptions, including those actively raised, are considered faults of the code. Additionally, the code feedback must align with the scenario and factor description. The implementation cannot be considered correct if the code execution failed, no matter what the reason is.
+
+  Please response the critic in the json format. Here is an example structure for the JSON output, please strictly follow the format:
+  {
+      "final_decision": True,
+      "final_feedback": "The final feedback message",
+  }
+
+evaluator_final_decision_v1_user: |-
+  --------------Factor information:---------------
+  {{ factor_information }}
+  --------------Execution feedback:---------------
+  {{ execution_feedback }}
+  --------------Code feedback:---------------
+  {{ code_feedback }}
+  --------------Factor value feedback:---------------
+  {{ value_feedback }}
