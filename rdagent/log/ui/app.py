@@ -1127,7 +1127,14 @@ if state.scenario is not None:
             r_options = list(state.msgs.keys())
             if 0 in r_options:
                 r_options.remove(0)
-            round = st.radio("**Loops**", horizontal=True, options=r_options, index=state.lround - 1)
+            # 确保 index 在有效范围内 [0, len(r_options)-1]
+            radio_index = max(0, min(state.lround - 1, len(r_options) - 1))
+            # 如果 state.lround 不在 r_options 中，尝试找到最接近的值
+            if state.lround in r_options:
+                radio_index = r_options.index(state.lround)
+            elif r_options and state.lround - 1 in r_options:
+                radio_index = r_options.index(state.lround - 1)
+            round = st.radio("**Loops**", horizontal=True, options=r_options, index=radio_index)
         else:
             round = 1
 
