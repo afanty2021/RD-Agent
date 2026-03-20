@@ -197,3 +197,6 @@ AGENTS.md
 *.output
 financial_data*.csv
 industry_lookup.csv.serena/
+
+# Local working directories
+MEMORY/
