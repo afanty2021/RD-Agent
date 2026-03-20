@@ -1,7 +1,7 @@
 # RD-Agent - Research & Development Agent
 
-> 最后更新：2026-01-12 10:46:09
-> 文档覆盖率：99.5% (增量更新)
+> 最后更新：2026-03-20 14:45:00
+> 文档覆盖率：99.5% (同步上游最新更新)
 
 ## 项目愿景
 
@@ -13,7 +13,7 @@ RD-Agent 采用基于 CoSTEER（Collaborative Self-adaptive Testing and Evaluati
 
 ### 核心特性
 - **自主实验生成**：基于历史反馈和新颖性策略自动生成实验方案
-- **多场景支持**：Kaggle竞赛、量化交易、通用数据科学任务、LLM微调
+- **多场景支持**：Kaggle竞赛、量化交易、通用数据科学任务、LLM微调、强化学习
 - **进化式开发**：通过评估反馈循环不断改进代码和策略
 - **知识管理**：自动积累和组织实验经验，支持RAG增强
 - **多模态支持**：集成多种LLM后端（LiteLLM、OpenAI、Anthropic等）
@@ -24,6 +24,10 @@ RD-Agent 采用基于 CoSTEER（Collaborative Self-adaptive Testing and Evaluati
 - **Prefect工作流**：集成Prefect工作流管理系统，支持工作流可视化和监控
 - **高级错误处理**：修复LiteLLM超时错误，提供自动重试和降级机制
 - **Qlib环境诊断工具**：新增量化交易环境诊断和修复工具集
+- **Web UI服务器**：新增Web UI服务器功能，支持实时交互和追踪查看（PR #1345）
+- **AutoRL-Bench框架**：新增强化学习基准测试框架和集成（PR #1348）
+- **LLM微调场景**：完整的LLM微调场景支持（PR #1314）
+- **Apple Silicon MPS支持**：增强对Apple Silicon GPU的MPS后端支持
 
 ## ✨ 模块结构图
 
@@ -145,11 +149,16 @@ graph TD
 | 量化交易代理 | `rdagent quant` | 量化因子/模型开发 | 集成Qlib量化框架，支持因子挖掘 |
 | 微调代理 | `rdagent finetune` | LLM微调任务 | 支持LLM和数据科学两种微调模式，多框架集成 |
 | 通用模型代理 | `rdagent general-model` | 模型提取与实现 | 从文档生成代码，支持多模型格式 |
+| 强化学习代理 | `rdagent rl` | 强化学习任务 | AutoRL-Bench框架，支持多个RL基准测试 |
+| Web UI服务器 | `rdagent server_ui` | Web界面 | 实时交互和追踪查看，Vue.js前端 |
 
 ### 新增功能特性
 
 | 功能类别 | 新增内容 | 影响范围 |
 |---------|---------|---------|
+| **Web UI** | Web UI服务器（PR #1345） | 实时交互和追踪查看，支持Vue.js前端 |
+| **强化学习** | AutoRL-Bench框架（PR #1348） | 强化学习基准测试和多benchmark集成 |
+| **LLM微调** | 完整微调场景（PR #1314） | LLM和数据科学两种微调模式 |
 | **智能体框架** | Pydantic AI集成 | 类型安全的AI代理开发 |
 | **工作流管理** | Prefect工作流集成 | 复杂任务编排和调度 |
 | **文档管理** | Context7智能文档系统 | 增强文档检索和管理 |
@@ -157,6 +166,7 @@ graph TD
 | **配置系统** | 数据科学配置化选项 | 环境变量和配置文件定制 |
 | **错误处理** | LiteLLM超时修复 | 自动重试和降级机制 |
 | **环境诊断** | Qlib环境诊断工具集 | 量化交易环境问题诊断和修复 |
+| **GPU支持** | Apple Silicon MPS支持 | 增强对Apple Silicon GPU的支持 |
 
 ## 运行与开发
 
@@ -177,6 +187,12 @@ rdagent quant model
 
 # 启动Web UI
 rdagent ui --port 19899
+
+# 启动Web UI服务器（新功能）
+rdagent server_ui
+
+# 强化学习任务
+rdagent rl
 ```
 
 ### 开发环境设置
@@ -1076,6 +1092,52 @@ res2 = agent.query("query text")
 
 ## 变更记录 (Changelog)
 
+### 2026-03-20 14:45:00 - 同步上游最新更新
+- **Git同步完成**：成功从microsoft/RD-Agent upstream合并14个新提交
+- **Web UI服务器（PR #1345）**：
+  - 新增完整的Web UI服务器功能
+  - 支持实时交互和追踪查看
+  - 基于Vue.js的现代化前端界面
+  - 支持多场景展示（当前排除data_science场景）
+
+- **AutoRL-Bench框架（PR #1348）**：
+  - 新增强化学习基准测试框架
+  - 集成多个benchmark：ALFWorld、AlpacaEval、DeepSearchQA、GSM8K、HumanEval等
+  - 支持多Agent架构（Claude、Codex、Gemini、OpenHands等）
+  - 完整的Web UI支持和实时追踪
+
+- **LLM微调场景（PR #1314）**：
+  - 完整的LLM微调场景实现
+  - 支持多个benchmark：FinanceIQ、TableBench、ChemCoT等
+  - 集成Llama Factory和OpenCompass
+  - 完整的Docker和Conda环境支持
+
+- **DeepSearchQA更新（PR #1368）**：
+  - 更新DeepSearchQA分割和翻译任务指令为英文
+  - 改进基准测试的准确性
+
+- **依赖项更新**：
+  - 大量Web前端依赖项更新（esbuild、vite、axios等）
+  - prismjs升级到1.30.0
+  - lodash升级到4.17.23
+  - minimatch升级到9.0.9
+  - rollup升级到4.59.0
+
+- **数据集模板修复（PR #1326）**：
+  - 修复渲染数据集段模板时保留null end_time的问题
+
+- **冲突解决**：
+  - .gitignore：合并两版本，保留MEMORY/和本地忽略规则
+  - README.md：使用upstream官方版本
+  - factor.py、evaluators.py：使用upstream版本
+  - runtime_info.py：合并Apple Silicon MPS支持
+
+- **文档更新**：
+  - 更新CLAUDE.md反映最新功能
+  - 添加Web UI、AutoRL-Bench、LLM微调场景说明
+  - 更新核心特性和应用场景列表
+  - 添加Apple Silicon MPS支持说明
+
 ### 2026-01-12 10:46:09 - 增量更新（环境诊断与测试增强）
 - **Qlib环境诊断工具集**：
   - 新增`scripts/diagnose_quant_env.py`：自动化环境问题诊断工具
@@ -1275,14 +1337,23 @@ res2 = agent.query("query text")
 
 ## 🎯 项目AI上下文初始化完成总结
 
-**RD-Agent项目AI上下文增量更新已完成**，自上次更新（2026-01-09）以来新增以下内容：
+**RD-Agent项目AI上下文已同步上游最新更新**，自上次更新（2026-01-12）以来新增以下内容：
 
 ### ✅ 本次更新成就
-- **覆盖率提升**：从99%提升到99.5%，新增环境诊断和测试增强功能
-- **Qlib环境诊断工具集**：完整的诊断、清理和修复指南
-- **Pydantic AI测试**：新增Pydantic AI Agent集成测试
-- **Prefect缓存测试**：验证基于@task的缓存机制
-- **MCP/Context7文档更新**：完善集成说明和配置示例
+- **上游同步完成**：成功从microsoft/RD-Agent合并14个新提交
+- **Web UI服务器**：新增完整的Web UI服务器功能（PR #1345）
+- **AutoRL-Bench框架**：新增强化学习基准测试框架（PR #1348）
+- **LLM微调场景**：完整的LLM微调场景支持（PR #1314）
+- **依赖项更新**：大量前端依赖项安全更新
+- **冲突解决**：妥善处理5个文件的合并冲突
+- **文档更新**：更新CLAUDE.md反映最新功能和变更
+
+### 🔧 新增功能覆盖
+- **Web UI服务器**：100%覆盖，提供实时交互和追踪查看
+- **AutoRL-Bench框架**：完整的强化学习基准测试框架
+- **LLM微调场景**：支持多种benchmark的微调任务
+- **Apple Silicon MPS**：增强对Apple Silicon GPU的支持
+- **依赖项安全更新**：多个前端依赖项的安全和功能更新
 
 ### 🔧 新增功能覆盖
 - **Qlib环境诊断**：100%覆盖，提供完整的诊断工具和修复指南
@@ -1303,8 +1374,8 @@ res2 = agent.query("query text")
 - **详细修复指南**：完整的段错误问题解决方案
 - **测试套件扩展**：新增Pydantic AI和Prefect测试
 
-**RD-Agent现已具备完整的环境诊断、问题修复和测试验证能力，可以更好地支持量化交易场景的部署和运维。特别是在macOS环境下，通过新增的诊断和修复工具，可以有效解决Qlib多进程兼容性问题。**
+**RD-Agent现已具备完整的Web UI、强化学习基准测试和LLM微调能力。通过本次同步，项目获得了最新的upstream功能更新，包括Web UI服务器、AutoRL-Bench框架和完整的LLM微调场景支持。同时增强了Apple Silicon GPU支持，并解决了多个合并冲突，确保代码库与上游保持同步。**
 
 ---
 
-*最后更新：2026-01-12 10:46:09*
+*最后更新：2026-03-20 14:45:00*
